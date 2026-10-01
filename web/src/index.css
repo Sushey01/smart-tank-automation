@@ -1,0 +1,78 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --surface-bg: #f3f7f8;
+  --surface-card: #ffffff;
+  --surface-muted: #e7eef2;
+  --surface-border: #d5e1e8;
+  --ink: #0f172a;
+  --ink-muted: #334155;
+  --ink-faint: #64748b;
+  --ring: #0891b2;
+  color-scheme: light;
+}
+
+.dark {
+  --surface-bg: #0b1220;
+  --surface-card: #121b2c;
+  --surface-muted: #1a2740;
+  --surface-border: #2a3b56;
+  --ink: #e8eef7;
+  --ink-muted: #c5d0e0;
+  --ink-faint: #93a4bb;
+  --ring: #22d3ee;
+  color-scheme: dark;
+}
+
+@layer base {
+  html {
+    @apply font-sans antialiased;
+  }
+
+  body {
+    @apply m-0 bg-surface-bg text-ink;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  .card {
+    @apply rounded-2xl border border-surface-border bg-surface-card p-5 shadow-card;
+  }
+
+  .badge {
+    @apply inline-flex items-center gap-1.5 rounded-full border border-surface-border bg-surface-muted px-2.5 py-1 text-xs font-medium text-ink;
+  }
+
+  .badge-ok {
+    @apply badge border-emerald-600/30 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300;
+  }
+
+  .badge-warn {
+    @apply badge border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-200;
+  }
+
+  .badge-danger {
+    @apply badge border-red-600/30 bg-red-500/10 text-red-800 dark:text-red-300;
+  }
+
+  .kpi-value {
+    @apply font-mono text-3xl font-semibold tabular-nums tracking-tight text-ink;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
