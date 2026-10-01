@@ -4,9 +4,7 @@
  */
 
 const { MongoClient } = require('mongodb');
-
-const MONGO_URI = process.env.MONGO_URI
-  || 'mongodb://localhost:27117,localhost:27118,localhost:27119/iothings?replicaSet=rs0';
+const { COLLECTION, DB_NAME, MONGO_URI } = require('./lib/config');
 
 function pickStats(explain) {
   const stats = explain.executionStats || {};
@@ -20,7 +18,7 @@ function pickStats(explain) {
 
 async function explainWith(collection, hint, label) {
   const explain = await collection
-    .find({ device_id: 'TANK_01' })
+    .find({ device_id: 'HOME_HUB_01' })
     .sort({ timestamp: -1 })
     .limit(50)
     .hint(hint)
@@ -35,8 +33,8 @@ async function explainWith(collection, hint, label) {
 async function main() {
   const mongo = new MongoClient(MONGO_URI, { retryReads: true });
   await mongo.connect();
-  const collection = mongo.db('iothings').collection('sensor_readings');
-  console.log('Query: find({ device_id: "TANK_01" }).sort({ timestamp: -1 }).limit(50)');
+  const collection = mongo.db(DB_NAME).collection(COLLECTION);
+  console.log('Query: find({ device_id: "HOME_HUB_01" }).sort({ timestamp: -1 }).limit(50)');
   await explainWith(collection, { $natural: 1 }, 'hint {$natural:1} (collection order, no device_time index)');
   await explainWith(collection, 'device_time', 'hint device_time ({device_id:1, timestamp:-1})');
   await mongo.close();

@@ -1,19 +1,19 @@
 import { NavLink, Outlet } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Activity, BarChart3, Bell, LayoutDashboard, Moon, Network, Sun, Waves } from 'lucide-react';
+import { Bell, History, LayoutDashboard, Moon, Network, Sun } from 'lucide-react';
 import clsx from 'clsx';
 import { getHealth } from '../api/health';
+import { getSummary } from '../api/telemetry';
 import { ApiError } from '../api/client';
 import { useTheme } from '../lib/theme-context';
+import { SirenControl } from './SirenControl';
 import { BackendDown } from './States';
 
 const links = [
   { to: '/', label: 'Home', icon: LayoutDashboard },
-  { to: '/devices', label: 'Devices', icon: Waves },
-  { to: '/telemetry', label: 'Telemetry', icon: Activity },
+  { to: '/history', label: 'History', icon: History },
   { to: '/alerts', label: 'Alerts', icon: Bell },
   { to: '/cluster', label: 'Cluster', icon: Network },
-  { to: '/analytics', label: 'Analytics', icon: BarChart3 },
 ];
 
 function navClass(active: boolean) {
@@ -23,15 +23,22 @@ function navClass(active: boolean) {
   );
 }
 
+const poll = { refetchInterval: 5000, refetchIntervalInBackground: false } as const;
+
 export function AppShell() {
   const { dark, toggle } = useTheme();
   const health = useQuery({
     queryKey: ['health'],
     queryFn: getHealth,
-    refetchInterval: 5000,
-    refetchIntervalInBackground: false,
+    ...poll,
+  });
+  const summary = useQuery({
+    queryKey: ['summary', 'siren'],
+    queryFn: getSummary,
+    ...poll,
   });
   const unreachable = health.isError && health.error instanceof ApiError && health.error.status === 0;
+  const alertActive = Boolean(summary.data?.reading?.alert);
 
   return (
     <div className="min-h-screen md:grid md:grid-cols-[15rem_1fr]">
@@ -56,9 +63,10 @@ export function AppShell() {
         <header className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-surface-border bg-surface-card/90 px-4 py-3 backdrop-blur">
           <div>
             <p className="text-sm font-semibold md:hidden">Smart Tank</p>
-            <p className="text-sm text-ink-muted">Synthetic tank, climate, and power telemetry</p>
+            <p className="text-sm text-ink-muted">HOME_HUB_01 water tank</p>
           </div>
           <div className="flex items-center gap-2">
+            <SirenControl active={alertActive} />
             <span className={health.isSuccess ? 'badge-ok' : 'badge-danger'}>
               <span className={health.isSuccess ? 'h-2 w-2 rounded-full bg-status-ok animate-pulse-ring' : 'h-2 w-2 rounded-full bg-status-danger'} aria-hidden />
               {health.isSuccess ? 'API connected' : 'API offline'}
@@ -72,7 +80,7 @@ export function AppShell() {
           {unreachable ? <BackendDown /> : <Outlet />}
         </main>
       </div>
-      <nav className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-6 border-t border-surface-border bg-surface-card px-1 py-2 md:hidden" aria-label="Primary">
+      <nav className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-4 border-t border-surface-border bg-surface-card px-1 py-2 md:hidden" aria-label="Primary">
         {links.map((link) => (
           <NavLink key={link.to} to={link.to} end={link.to === '/'} className={({ isActive }) => clsx('flex flex-col items-center gap-1 text-[10px]', isActive ? 'text-brand-600' : 'text-ink-faint')}>
             <link.icon size={18} aria-hidden />

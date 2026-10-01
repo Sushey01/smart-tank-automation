@@ -1,46 +1,48 @@
 import { useQuery } from '@tanstack/react-query';
-import { Activity, Bell, Database, Radio } from 'lucide-react';
-import { getAlerts } from '../api/alerts';
-import { getDevices } from '../api/devices';
+import { ArrowDown, ArrowRight, ArrowUp, Bell, Clock, Droplets, Radio } from 'lucide-react';
 import { getHealth } from '../api/health';
-import { getStats } from '../api/stats';
-import { getSeries } from '../api/telemetry';
+import { getAlerts, getAverages, getHistorySeries, getSummary } from '../api/telemetry';
 import { MemberBadge } from '../components/StatusBadge';
 import { Sparkline } from '../components/Sparkline';
 import { StatCard } from '../components/StatCard';
 import { EmptyState, ErrorState, Skeleton } from '../components/States';
 import { TankGauge } from '../components/TankGauge';
-import { ageLabel, errorMessage, formatNumber, reasonLabel } from '../lib/format';
+import { ageLabel, errorMessage, formatNumber, formatWhen, reasonLabel } from '../lib/format';
+import type { Trend } from '../types';
 
 const poll = { refetchInterval: 5000, refetchIntervalInBackground: false } as const;
 
+function trendIcon(trend: Trend) {
+  if (trend === 'rising') return <ArrowUp size={18} />;
+  if (trend === 'falling') return <ArrowDown size={18} />;
+  return <ArrowRight size={18} />;
+}
+
+function estimateText(kind: string, minutes: number | null) {
+  if (kind === 'empty' && minutes !== null) return `${formatNumber(minutes)} min`;
+  if (kind === 'full' && minutes !== null) return `${formatNumber(minutes)} min`;
+  return 'Not estimated';
+}
+
+function estimateHint(kind: string) {
+  if (kind === 'empty') return 'until empty at the recent rate';
+  if (kind === 'full') return 'until full at the recent rate';
+  return 'change over 15 minutes is too small';
+}
+
 export function Dashboard() {
-  const stats = useQuery({ queryKey: ['stats'], queryFn: getStats, ...poll });
-  const devices = useQuery({ queryKey: ['devices'], queryFn: getDevices, ...poll });
-  const alerts = useQuery({ queryKey: ['alerts', 'dash'], queryFn: () => getAlerts({ limit: 8, page: 1 }), ...poll });
+  const summary = useQuery({ queryKey: ['summary'], queryFn: getSummary, ...poll });
+  const alerts = useQuery({ queryKey: ['alerts', 'dash'], queryFn: () => getAlerts({ limit: 5, page: 1 }), ...poll });
   const health = useQuery({ queryKey: ['health'], queryFn: getHealth, ...poll });
-  const climate = useQuery({
-    queryKey: ['series', 'CLIMATE_01', 'temperature_c', 'minute'],
-    queryFn: () => getSeries({
-      device_id: 'CLIMATE_01',
-      metric: 'temperature_c',
-      bucket: 'minute',
-      from: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
-    }),
-    ...poll,
-  });
-  const power = useQuery({
-    queryKey: ['series', 'POWER_01', 'power_w', 'minute'],
-    queryFn: () => getSeries({
-      device_id: 'POWER_01',
-      metric: 'power_w',
-      bucket: 'minute',
-      from: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
-    }),
+  const averages = useQuery({ queryKey: ['averages'], queryFn: getAverages, ...poll });
+  const hourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+  const series = useQuery({
+    queryKey: ['history-series', 'minute', 'hour'],
+    queryFn: () => getHistorySeries({ bucket: 'minute', from: hourAgo }),
     ...poll,
   });
 
-  if (stats.isLoading || devices.isLoading) {
+  if (summary.isLoading) {
     return (
       <div className="grid gap-4 md:grid-cols-4" aria-busy="true" aria-label="Loading dashboard">
         {Array.from({ length: 4 }, (_, index) => <Skeleton key={index} className="h-28" />)}
@@ -50,89 +52,69 @@ export function Dashboard() {
     );
   }
 
-  if (stats.isError || devices.isError) {
-    return <ErrorState message={errorMessage(stats.error ?? devices.error)} onRetry={() => { void stats.refetch(); void devices.refetch(); }} />;
+  if (summary.isError || !summary.data) {
+    return <ErrorState message={errorMessage(summary.error)} onRetry={() => { void summary.refetch(); }} />;
   }
 
-  const tanks = (devices.data?.devices ?? []).filter((device) => device.type === 'water_tank');
-  const climateDevice = devices.data?.devices.find((device) => device.id === 'CLIMATE_01');
-  const powerDevice = devices.data?.devices.find((device) => device.id === 'POWER_01');
-  const hasReadings = (devices.data?.devices ?? []).some((device) => device.latest);
-  const updated = Math.max(stats.dataUpdatedAt, devices.dataUpdatedAt);
+  const data = summary.data;
+  const tank = data.reading?.telemetry.water_tank;
+  const average = averages.data?.devices[0];
+  const primary = health.data?.members.find((member) => member.isPrimary);
 
   return (
     <div className="animate-fade-up space-y-5">
-      <div className="flex items-center gap-2 text-sm text-ink-muted">
+      <div className="flex flex-wrap items-center gap-3 text-sm text-ink-muted">
         <span className="h-2.5 w-2.5 rounded-full bg-status-ok animate-pulse-ring" aria-hidden />
-        Last updated {ageLabel(new Date(updated).toISOString())}
+        Last seen {ageLabel(data.last_seen)}
+        <span className="font-mono">RSSI {formatNumber(data.signal_rssi, 0)} dBm</span>
       </div>
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Key figures">
-        <StatCard label="Documents" value={formatNumber(stats.data?.total_documents)} hint="sensor_readings" icon={<Database size={18} />} />
-        <StatCard label="Last hour" value={formatNumber(stats.data?.documents_last_hour)} hint="readings stored" icon={<Activity size={18} />} />
-        <StatCard label="Active alerts" value={formatNumber(stats.data?.active_alerts)} hint="alert documents in the last hour" icon={<Bell size={18} />} />
-        <StatCard label="Devices online" value={formatNumber(stats.data?.devices_online)} hint="seen in the last 30 seconds" icon={<Radio size={18} />} />
+        <StatCard label="Level" value={`${formatNumber(tank?.ultrasonic_depth_pct, 1)}%`} hint="ultrasonic depth" icon={<Droplets size={18} />} />
+        <StatCard label="Volume" value={`${formatNumber(tank?.volume_litres, 0)} L`} hint="of 2,000 L" icon={<Droplets size={18} />} />
+        <StatCard label="Trend" value={data.trend.charAt(0).toUpperCase() + data.trend.slice(1)} hint={`${formatNumber(data.rate_litres_per_hour, 1)} L/h over 15 min`} icon={trendIcon(data.trend)} />
+        <StatCard label="Time estimate" value={estimateText(data.estimate.kind, data.estimate.minutes)} hint={estimateHint(data.estimate.kind)} icon={<Clock size={18} />} />
       </section>
-      {!hasReadings && (
-        <EmptyState title="No readings yet" body="Seed the collection or start the simulator so the gauges have a latest document." />
+      {!data.reading && (
+        <EmptyState title="No readings yet" body="Start the simulator so HOME_HUB_01 publishes a tank document." />
       )}
-      <section className="grid gap-4 lg:grid-cols-2" aria-label="Water tanks">
-        {tanks.map((device) => <TankGauge key={device.id} device={device} />)}
-      </section>
-      <section className="grid gap-4 lg:grid-cols-2">
-        <article className="card">
-          <h2 className="text-lg font-semibold">Living room climate</h2>
-          <p className="mt-1 font-mono text-2xl tabular-nums">
-            {formatNumber(climateDevice?.latest?.climate?.temperature_c, 1)}°C
-          </p>
-          <p className="text-sm text-ink-muted">
-            Humidity {formatNumber(climateDevice?.latest?.climate?.humidity_pct, 0)}% · CO₂ {formatNumber(climateDevice?.latest?.climate?.co2_ppm, 0)} ppm
-          </p>
-          <div className="mt-3">
-            <Sparkline points={climate.data?.points ?? []} label="Living room temperature over the last hour" />
+      <section className="grid gap-4 lg:grid-cols-2" aria-label="Water tank">
+        <TankGauge reading={data.reading} status={data.status} />
+        <article className="card space-y-4">
+          <div>
+            <h2 className="text-lg font-semibold">Last hour</h2>
+            <p className="text-sm text-ink-muted">
+              Min {formatNumber(data.last_hour.min, 1)}% · max {formatNumber(data.last_hour.max, 1)}%
+              {average ? ` · stored average ${formatNumber(average.avg_water_level, 1)}%` : ''}
+            </p>
           </div>
-        </article>
-        <article className="card">
-          <h2 className="text-lg font-semibold">Main panel power</h2>
-          <p className="mt-1 font-mono text-2xl tabular-nums">
-            {formatNumber(powerDevice?.latest?.power_meter?.power_w, 0)} W
-          </p>
-          <p className="text-sm text-ink-muted">
-            {formatNumber(powerDevice?.latest?.power_meter?.voltage_v, 1)} V · {formatNumber(powerDevice?.latest?.power_meter?.current_a, 2)} A
-          </p>
-          <div className="mt-3">
-            <Sparkline points={power.data?.points ?? []} label="Power draw over the last hour" />
+          {series.isLoading && <Skeleton className="h-16" />}
+          {series.isError && <ErrorState message={errorMessage(series.error)} onRetry={() => { void series.refetch(); }} />}
+          {series.data && <Sparkline points={series.data.points} label="Water level over the last hour" />}
+          <div className="flex items-center gap-2 text-sm text-ink-muted">
+            <Radio size={16} aria-hidden />
+            Firmware {data.reading?.metadata.firmware ?? '—'} · distance {formatNumber(tank?.distance_cm, 1)} cm
           </div>
-        </article>
-      </section>
-      <section className="grid gap-4 lg:grid-cols-[1.4fr_0.8fr]">
-        <article className="card">
-          <h2 className="text-lg font-semibold">Recent alerts</h2>
-          {alerts.isLoading && <Skeleton className="mt-4 h-24" />}
-          {alerts.isError && <p className="mt-3 text-sm text-status-danger">{errorMessage(alerts.error)}</p>}
-          {alerts.data && alerts.data.items.length === 0 && <p className="mt-3 text-sm text-ink-muted">No alert documents in the latest page.</p>}
-          <ul className="mt-3 divide-y divide-surface-border">
-            {alerts.data?.items.map((item) => (
-              <li key={item._id ?? item.timestamp} className="flex items-start justify-between gap-3 py-3 text-sm">
-                <div>
-                  <p className="font-mono text-ink">{item.device_id}</p>
-                  <p className="text-ink-muted">{item.alert_reasons.map(reasonLabel).join(', ')}</p>
-                </div>
-                <time className="text-xs text-ink-faint" dateTime={item.timestamp}>{ageLabel(item.timestamp)}</time>
-              </li>
-            ))}
-          </ul>
-        </article>
-        <article className="card">
-          <h2 className="text-lg font-semibold">Replica set</h2>
-          <p className="mt-1 text-sm text-ink-muted">{health.data ? `Set ${health.data.set}` : 'Waiting for rs.status'}</p>
-          <ul className="mt-3 space-y-2">
-            {health.data?.members.map((member) => (
-              <li key={member.name} className="flex items-center justify-between gap-2 text-sm">
-                <span className="font-mono text-xs">{member.name}</span>
-                <MemberBadge state={member.state} />
-              </li>
-            ))}
-          </ul>
+          <div>
+            <h3 className="flex items-center gap-2 text-sm font-semibold">
+              <Bell size={16} aria-hidden />
+              Recent alerts
+            </h3>
+            {alerts.isLoading && <Skeleton className="mt-2 h-16" />}
+            {alerts.isError && <p className="mt-2 text-sm text-status-danger">{errorMessage(alerts.error)}</p>}
+            {alerts.data && alerts.data.items.length === 0 && <p className="mt-2 text-sm text-ink-muted">No overflow or dry-run documents yet.</p>}
+            <ul className="mt-2 space-y-2 text-sm">
+              {(alerts.data?.items ?? []).map((item) => (
+                <li key={item._id ?? item.timestamp} className="flex items-center justify-between gap-3">
+                  <span className="badge-danger">{item.alert_reasons.map(reasonLabel).join(', ')}</span>
+                  <span className="text-ink-muted">{formatWhen(item.timestamp)}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div className="border-t border-surface-border pt-3 text-sm">
+            <p className="text-ink-muted">Replica set {health.data?.set ?? '—'}</p>
+            {primary ? <div className="mt-2"><MemberBadge state={primary.state} /> <span className="ml-2 font-mono text-ink-muted">{primary.name}</span></div> : <p className="mt-2 text-ink-muted">Primary not reported yet.</p>}
+          </div>
         </article>
       </section>
     </div>

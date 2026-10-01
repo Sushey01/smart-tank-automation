@@ -2,7 +2,7 @@
   "name": "smart-tank-automation",
   "version": "1.0.0",
   "private": true,
-  "description": "Fault-tolerant NoSQL telemetry platform for synthetic IoT tank, climate, and power devices.",
+  "description": "Fault-tolerant NoSQL telemetry platform for one synthetic home water tank.",
   "engines": {
     "node": ">=18"
   },
@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "cors": "^2.8.5",
+    "dotenv": "^16.6.1",
     "express": "^4.21.2",
     "mongodb": "^6.12.0",
     "mqtt": "^5.10.3"

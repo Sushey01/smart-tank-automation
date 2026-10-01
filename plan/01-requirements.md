@@ -2,49 +2,53 @@
 
 ## Functional
 
-1. Simulate four devices with three payload shapes:
-   - `TANK_01` (roof) and `TANK_02` (basement): water level, floats, inlet valve, booster pump.
-   - `CLIMATE_01` (living_room): temperature, humidity, CO2.
-   - `POWER_01` (main_panel): voltage, power, current, cumulative energy.
-2. Each device publishes on its own timer to `iothings/<device_type>/<device_id>/telemetry` at QoS 1, with a random gap of 2000–8999 ms.
-3. Ingestion subscribes to `iothings/+/+/telemetry`, rejects invalid messages, converts `timestamp` to a BSON `Date`, computes `alert_reasons` and `alert`, and inserts into `iothings.sensor_readings`.
-4. Alert codes: `TANK_OVERFLOW` (depth ≥ 85 or high float), `TANK_DRY_RUN` (depth ≤ 25 or low float), `HIGH_TEMPERATURE` (temperature above 35 °C), `POWER_SPIKE` (power above 3500 W).
-5. REST API (CORS limited to `http://localhost:5173`):
+1. Simulate one device, `HOME_HUB_01` (`water_tank`, location `home`):
+   - level 20–90 percent
+   - volume from a 2000 L tank
+   - distance from a 200 cm tank
+   - high float at or above 85, low float at or below 25
+   - inlet valve `CLOSED` when high, otherwise `OPEN`
+   - booster pump `EMERGENCY_STOP` when low, otherwise `ACTIVE`
+   - firmware always `v2.4.1`
+2. Publish on `iothings/home/telemetry` at QoS 1, with a random gap of 2000–8999 ms. The scheduler starts from `client.once('connect')`.
+3. Ingestion subscribes to that topic, stores a message only when `device_id` is `HOME_HUB_01` and `telemetry.water_tank` is present, converts `timestamp` to a BSON `Date`, computes `alert_reasons` and `alert`, and inserts into `smart_water.sensor_activations`.
+4. Alert codes: `TANK_OVERFLOW` and `TANK_DRY_RUN` only.
+5. On a new overflow or dry-run, POST one Telegram `sendMessage`. Send once more when the alert clears. Do not send again while the same alert remains active. A Telegram failure must not drop the insert.
+6. REST API (CORS limited to `http://localhost:5173`):
    - `GET /api/health`
-   - `GET /api/devices`
    - `GET /api/telemetry/latest`
-   - `GET /api/telemetry`
-   - `GET /api/telemetry/series`
-   - `GET /api/alerts`
-   - `GET /api/analytics/averages`
-   - `GET /api/analytics/alerts-hourly`
-   - `GET /api/stats`
-6. Seed script loads a chosen total (default 10,000), split evenly, with monotonic 2–9 s gaps ending near the current time, in batches of 5,000. It writes `synthetic_sensor_dataset_sample.json` (first 200 documents).
-7. Benchmark script prints `explain('executionStats')` for a recent-readings query with a collection scan hint and with the `device_time` index.
-8. React UI: dashboard, devices, telemetry, alerts, cluster (failover evidence), analytics.
-9. Smoke script calls every GET route and expects HTTP 400 for a bad date and an unknown metric.
+   - `GET /api/telemetry/alerts`
+   - `GET /api/telemetry/analytics/averages`
+   - `GET /api/telemetry/history`
+   - `GET /api/telemetry/summary`
+7. Seed script writes `synthetic_sensor_dataset.json` with 1200 documents from `2026-09-01T00:00:00.000Z`, gaps of 3–8 seconds. It does not require MongoDB.
+8. Benchmark script prints `explain('executionStats')` for a recent-readings query with a collection scan hint and with the `device_time` index.
+9. React UI: dashboard, history with CSV, alerts, cluster (failover evidence). Header control arms a browser siren for overflow and dry-run.
+10. Smoke script calls every GET route and expects HTTP 400 for a bad date, a bad bucket, an unknown device, and an unknown alert reason.
 
 ## Non-functional
 
-- Inserts use write concern `w: "majority"` so an acknowledged write has reached a majority of the replica set.
+- Inserts use write concern `w: "majority"`.
 - Driver options `retryWrites` and `retryReads` are on.
 - Analytics aggregations use `readPreference: secondaryPreferred`. Other reads use the primary.
 - Indexes: `device_time` on `{device_id: 1, timestamp: -1}`, `{alert: 1, timestamp: -1}`, `{device_type: 1, timestamp: -1}`, and a 30-day TTL on `timestamp`.
-- Paginated routes cap `limit` at 100. Invalid dates, metrics, buckets, and alert reasons return 400.
+- Paginated routes cap `limit` at 100. Invalid dates, buckets, and alert reasons return 400.
 - Every route is wrapped so failures become JSON errors, not an unhandled crash.
 - The UI polls every 5 s and pauses while the browser tab is hidden. The cluster page polls every 2 s.
 - Status is never conveyed by colour alone: badges include an icon and a text label.
+- Online means last seen under 30 seconds; otherwise offline.
 - Replica set goal is availability. It is not sharding and it does not add write throughput in proportion to node count.
+- The bot token is read from the environment and is never logged or written into the repository.
 
 ## TODO: verify against the coursework brief
 
-The working build uses the numbers below. Before submission, check the official CMP6207 brief and change the seed default or the report if the brief asks for something else.
+The working build uses the numbers below. Before submission, check the official CMP6207 brief and change the seed count or the report if the brief asks for something else.
 
 | Item | Value used in this repo | Brief says (fill in) |
 | --- | --- | --- |
-| Device count | 4 devices, 3 types | |
-| Seeded record count | 10,000 (`node src/seed.js [total]`) | |
+| Device count | 1 device, `HOME_HUB_01` | |
+| Seeded record count | 1,200 in `synthetic_sensor_dataset.json` (file only) | |
 | Live publish interval | 2–9 seconds, under 10 s | |
-| Minimum API endpoints | 9 GET routes listed above | |
-| Replica set size | 3 members | |
+| Minimum API endpoints | 6 GET routes listed above | |
+| Replica set size | 3 members on 27017–27019 | |
 | Evidence screenshots | See `plan/06-evidence-checklist.md` | |

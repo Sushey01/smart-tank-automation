@@ -1,6 +1,6 @@
 # Smart Tank web UI
 
-Vite + React 18 + TypeScript dashboard for the coursework API.
+Vite + React 18 + TypeScript dashboard for the one-tank API.
 
 ## Scripts
 
@@ -14,6 +14,17 @@ Vite + React 18 + TypeScript dashboard for the coursework API.
 
 Start the API from the repository root (`npm run server`) before expecting live data. Three terminals are enough: API, simulator, and this dev server. MongoDB and Mosquitto run in their own terminals.
 
+## Pages
+
+| Path | What it shows |
+| --- | --- |
+| `/` | Level, litres, trend, time estimate, tank gauge, last-hour sparkline, alert feed, cluster mini-status |
+| `/history` | Minute or hour level chart, table, CSV of the current page |
+| `/alerts` | Overflow and dry-run documents |
+| `/cluster` | Three replica-set members, polled every 2 seconds |
+
+The header has **Arm siren**. That click creates the audio context. While armed, an active overflow or dry-run plays a two-tone sweep. **Silence** stops it. The choice is stored in `localStorage` under `tank-siren-armed`. A fresh visit still needs a click before any sound, because browsers block autoplay.
+
 ## Folder structure
 
 ```
@@ -21,10 +32,10 @@ web/
   index.html
   tailwind.config.js
   src/
-    api/          one module per resource, plus client.ts
-    components/   shell, gauges, tables, states
+    api/          client, health, telemetry
+    components/   shell, gauge, siren, tables, states
     lib/          formatting and theme
-    pages/        dashboard, devices, telemetry, alerts, cluster, analytics
+    pages/        dashboard, history, alerts, cluster
     types.ts
     App.tsx
     main.tsx
@@ -40,5 +51,3 @@ To point at another origin, create `web/.env`:
 ```
 VITE_API_BASE_URL=http://localhost:3000
 ```
-
-No trailing slash. Restart `npm run dev` after changing it. The API only sends CORS for `http://localhost:5173`, so a different UI origin needs a matching CORS change in `src/server.js`.

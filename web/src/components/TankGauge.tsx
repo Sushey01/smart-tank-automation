@@ -1,32 +1,32 @@
 import { Droplets } from 'lucide-react';
-import type { DeviceSummary } from '../types';
+import type { DeviceStatus, SensorReading } from '../types';
 import { formatNumber } from '../lib/format';
 import { StatusBadge } from './StatusBadge';
 
-export function TankGauge({ device }: { device: DeviceSummary }) {
-  const level = device.latest?.water_tank?.ultrasonic_depth_pct ?? 0;
-  const litres = device.latest?.water_tank?.volume_litres;
+export function TankGauge({ reading, status }: { reading: SensorReading | null; status: DeviceStatus }) {
+  const tank = reading?.telemetry.water_tank;
+  const level = tank?.ultrasonic_depth_pct ?? 0;
+  const litres = tank?.volume_litres;
   const clamped = Math.max(0, Math.min(100, level));
-  const high = device.latest?.float_switches?.high_level_overflow;
-  const low = device.latest?.float_switches?.low_level_dry_run;
-  const valve = device.latest?.actuator_states?.inlet_valve ?? 'CLOSED';
-  const pump = device.latest?.actuator_states?.booster_pump ?? 'EMERGENCY_STOP';
-  const location = device.location.replaceAll('_', ' ');
+  const high = reading?.telemetry.float_switches.high_level_overflow;
+  const low = reading?.telemetry.float_switches.low_level_dry_run;
+  const valve = reading?.telemetry.actuator_states.inlet_valve ?? 'CLOSED';
+  const pump = reading?.telemetry.actuator_states.booster_pump ?? 'EMERGENCY_STOP';
 
   return (
     <article className="card">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="font-mono text-sm text-ink-muted">{device.id}</p>
-          <h2 className="text-lg font-semibold capitalize">{location} tank</h2>
+          <p className="font-mono text-sm text-ink-muted">HOME_HUB_01</p>
+          <h2 className="text-lg font-semibold">Home tank</h2>
         </div>
-        <StatusBadge status={device.status} />
+        <StatusBadge status={status} />
       </div>
       <div className="mt-5 flex flex-col items-center gap-4 sm:flex-row sm:items-end">
         <div
           className="relative h-64 w-36 overflow-hidden rounded-b-3xl rounded-t-lg border-2 border-brand-700/30 bg-surface-muted"
           role="img"
-          aria-label={`${device.id} is ${formatNumber(level, 1)} percent full, about ${formatNumber(litres, 0)} litres`}
+          aria-label={`Home tank is ${formatNumber(level, 1)} percent full, about ${formatNumber(litres, 0)} litres`}
         >
           <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-brand-700 to-brand-400" style={{ height: `${clamped}%` }}>
             <svg className="absolute -top-3 left-0 h-6 w-[200%] animate-wave text-brand-200" viewBox="0 0 120 20" preserveAspectRatio="none" aria-hidden>

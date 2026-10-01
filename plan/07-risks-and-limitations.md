@@ -2,40 +2,40 @@
 
 ## Single host
 
-All three `mongod` processes, Mosquitto, the API, and the browser run on one computer. Stopping one `mongod` demonstrates an election. Powering the computer off stops the whole set. This is not a multi-site deployment.
+All three `mongod` processes, Mosquitto, and Node share one machine. An election here shows process failure, not the loss of a whole server or a network partition between data centres.
 
 ## Anonymous local broker
 
-`mosquitto.conf` sets `allow_anonymous true` and listens on port 1883 without TLS. That is acceptable only on localhost for a lab. A real deployment needs accounts or certificates and a broker that is not open on a shared network.
+`mosquitto.conf` allows anonymous clients on port 1883. Anyone who can reach that port can publish. The lab accepts that. A deployed broker needs authentication and TLS.
 
 ## Replica set is not sharding
 
-A replica set copies the same data to every member. Reads can be spread to secondaries. Writes still go to the primary. Adding a third node does not increase storage capacity or write throughput the way a shard would. Say this in the report and the README.
+Each member stores a full copy. Adding a member adds availability and read capacity, not a larger write throughput. Do not describe `rs0` as a sharded cluster.
 
 ## Election pause
 
-When the primary stops, the set cannot acknowledge majority writes until a new primary is elected. Expect a brief write pause during election (~10 s). The driver retries retryable writes. This is automatic failover with no acknowledged-write loss. It is not zero downtime, and this repository does not claim that.
+While the set has no primary, majority writes wait. The driver retries. The honest description is a brief write pause during election (~10 s), with no loss of writes that were already acknowledged.
 
 ## Replication lag
 
-Analytics use `secondaryPreferred`. A secondary can be a moment behind the primary, so an average can omit the newest insert. Latest-reading and health routes stay on the primary.
+Averages and bucketed history use `secondaryPreferred`. A secondary can be a moment behind the primary. Latest and health reads stay on the primary.
 
 ## At-least-once MQTT
 
-QoS 1 can deliver a payload twice. Ingestion inserts each delivery. Duplicate documents are possible. A production design would use a deterministic `_id` (device id + timestamp) and accept duplicate-key errors.
+QoS 1 can deliver the same payload twice. Ingestion inserts both copies. There is no idempotency key.
 
 ## TTL is a lab control, not a full GDPR programme
 
-Readings are synthetic. The 30-day TTL on `timestamp` illustrates storage limitation. It does not implement subject access, lawful basis, or a retention schedule for real occupants.
-
-## Secondary counts during failover
-
-While a member is down, its count cannot be read. After it rejoins and catches up, counts should match. Compare counts only once `rs.status()` shows the member as SECONDARY (or PRIMARY), not while it is STARTUP2.
+The 30-day TTL on `timestamp` is the storage-limitation control for synthetic readings. It does not replace a privacy notice, access control, or a decision about the Telegram chat history, which lives on Telegram’s servers.
 
 ## Port collision
 
-Port 27017 may already be a different MongoDB instance. This project does not use it. Optional Docker uses 27217–27219 so it does not bind 27017 or the coursework ports 27117–27119. Do not run Docker and the host replica set against the same ports at the same time.
+Port 27017 is often another project’s `mongod`. `scripts/replica-init.js` refuses to call `rs.initiate` in that case. Do not kill that process to free the port unless it is yours.
 
 ## UI polling
 
-The dashboard refreshes every 5 seconds. It is not a MongoDB change stream. A reading can appear up to one poll late.
+The dashboard polls every 5 seconds and the cluster page every 2 seconds. A change stream would be faster and was not required. Polling pauses while the tab is hidden.
+
+## Siren and Telegram
+
+The siren cannot start until the operator clicks **Arm siren**. A phone notification depends on `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`. If either is missing, readings are still stored.

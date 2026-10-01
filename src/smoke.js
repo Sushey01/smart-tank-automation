@@ -7,21 +7,17 @@ const base = process.env.API_URL || 'http://localhost:3000';
 
 const checks = [
   { name: 'health', path: '/api/health', expect: 200 },
-  { name: 'devices', path: '/api/devices', expect: 200 },
-  { name: 'telemetry latest', path: '/api/telemetry/latest?device_id=TANK_01', expect: 200 },
-  { name: 'telemetry page', path: '/api/telemetry?device_id=TANK_01&page=1&limit=5', expect: 200 },
-  { name: 'telemetry bad date', path: '/api/telemetry?from=not-a-date', expect: 400 },
-  {
-    name: 'series',
-    path: '/api/telemetry/series?device_id=TANK_01&metric=ultrasonic_depth_pct&bucket=minute',
-    expect: 200,
-  },
-  { name: 'series bad metric', path: '/api/telemetry/series?device_id=TANK_01&metric=__proto__', expect: 400 },
-  { name: 'alerts', path: '/api/alerts?page=1&limit=5', expect: 200 },
-  { name: 'alerts reason', path: '/api/alerts?reason=TANK_OVERFLOW&limit=5', expect: 200 },
-  { name: 'averages', path: '/api/analytics/averages', expect: 200 },
-  { name: 'alerts hourly', path: '/api/analytics/alerts-hourly', expect: 200 },
-  { name: 'stats', path: '/api/stats', expect: 200 },
+  { name: 'telemetry latest', path: '/api/telemetry/latest', expect: 200 },
+  { name: 'telemetry latest bad device', path: '/api/telemetry/latest?device_id=TANK_01', expect: 400 },
+  { name: 'alerts', path: '/api/telemetry/alerts?page=1&limit=5', expect: 200 },
+  { name: 'alerts reason', path: '/api/telemetry/alerts?reason=TANK_OVERFLOW&limit=5', expect: 200 },
+  { name: 'alerts bad reason', path: '/api/telemetry/alerts?reason=POWER_SPIKE', expect: 400 },
+  { name: 'averages', path: '/api/telemetry/analytics/averages', expect: 200 },
+  { name: 'history', path: '/api/telemetry/history?page=1&limit=5', expect: 200 },
+  { name: 'history bucket', path: '/api/telemetry/history?bucket=minute', expect: 200 },
+  { name: 'history bad date', path: '/api/telemetry/history?from=not-a-date', expect: 400 },
+  { name: 'history bad bucket', path: '/api/telemetry/history?bucket=week', expect: 400 },
+  { name: 'summary', path: '/api/telemetry/summary', expect: 200 },
 ];
 
 async function main() {

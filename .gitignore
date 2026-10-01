@@ -6,3 +6,4 @@ mongo-cluster/
 .DS_Store
 *.log
 synthetic_sensor_dataset_sample.json
+synthetic_sensor_dataset.json

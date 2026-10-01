@@ -1,6 +1,5 @@
 # Optional path. Do not use this at the same time as the host replica set.
-# Published ports are 27217-27219 so this file does not bind 27017
-# (often already in use) or the coursework ports 27117-27119.
+# Published ports are 27217-27219 so this file does not bind 27017-27019.
 services:
   mongo1:
     image: mongo:7

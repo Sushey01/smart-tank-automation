@@ -1,5 +1,5 @@
 /**
- * MQTT ingestion and REST API.
+ * MQTT ingestion and REST API for one water tank.
  * Inserts use majority write concern. Analytics reads prefer a secondary.
  * Failover: automatic failover with no acknowledged-write loss;
  * brief write pause during election (~10 s).
@@ -9,19 +9,11 @@ const express = require('express');
 const cors = require('cors');
 const mqtt = require('mqtt');
 const { MongoClient, ReadPreference } = require('mongodb');
-const {
-  ALERT,
-  METRICS,
-  devices,
-  toStoredReading,
-  validatePayload,
-} = require('./lib/devices');
+const { COLLECTION, DB_NAME, MONGO_URI, MQTT_URL, PORT } = require('./lib/config');
+const { ALERT, HOME_HUB, TELEMETRY_TOPIC, toStoredReading, validatePayload } = require('./lib/devices');
 const { ensureIndexes } = require('./lib/indexes');
-
-const PORT = Number(process.env.PORT) || 3000;
-const MONGO_URI = process.env.MONGO_URI
-  || 'mongodb://localhost:27117,localhost:27118,localhost:27119/iothings?replicaSet=rs0';
-const MQTT_URL = process.env.MQTT_URL || 'mqtt://localhost:1883';
+const { deriveInsight } = require('./lib/insights');
+const { notifyAlertTransition } = require('./lib/telegram');
 
 const client = new MongoClient(MONGO_URI, {
   retryWrites: true,
@@ -29,6 +21,9 @@ const client = new MongoClient(MONGO_URI, {
   writeConcern: { w: 'majority' },
   serverSelectionTimeoutMS: 8000,
 });
+
+const secondary = { readPreference: new ReadPreference('secondaryPreferred') };
+const LEVEL_FIELD = '$telemetry.water_tank.ultrasonic_depth_pct';
 
 const app = express();
 app.use(cors({ origin: 'http://localhost:5173' }));
@@ -70,6 +65,16 @@ function parseDate(value, field) {
   return date;
 }
 
+function timeRange(query, fallbackFrom) {
+  const from = parseDate(query.from, 'from') || fallbackFrom;
+  const to = parseDate(query.to, 'to');
+  if (from && to && from > to) throw httpError(400, 'from must be before to');
+  const timestamp = {};
+  if (from) timestamp.$gte = from;
+  if (to) timestamp.$lte = to;
+  return Object.keys(timestamp).length ? timestamp : null;
+}
+
 function serializeReading(doc) {
   if (!doc) return null;
   return {
@@ -78,37 +83,6 @@ function serializeReading(doc) {
     timestamp: doc.timestamp instanceof Date ? doc.timestamp.toISOString() : doc.timestamp,
     ingested_at: doc.ingested_at instanceof Date ? doc.ingested_at.toISOString() : doc.ingested_at,
   };
-}
-
-function deviceStatus(lastSeen) {
-  if (!lastSeen) return 'offline';
-  const age = Date.now() - new Date(lastSeen).getTime();
-  return age < 30_000 ? 'online' : 'offline';
-}
-
-function telemetryFilter(query) {
-  const filter = {};
-  if (query.device_id) {
-    if (!/^[A-Za-z0-9_-]{1,64}$/.test(String(query.device_id))) {
-      throw httpError(400, 'device_id is invalid');
-    }
-    filter.device_id = String(query.device_id);
-  }
-  if (query.device_type) {
-    if (!/^[a-z0-9_]{1,64}$/.test(String(query.device_type))) {
-      throw httpError(400, 'device_type is invalid');
-    }
-    filter.device_type = String(query.device_type);
-  }
-  const from = parseDate(query.from, 'from');
-  const to = parseDate(query.to, 'to');
-  if (from && to && from > to) throw httpError(400, 'from must be before to');
-  if (from || to) {
-    filter.timestamp = {};
-    if (from) filter.timestamp.$gte = from;
-    if (to) filter.timestamp.$lte = to;
-  }
-  return filter;
 }
 
 async function route(res, fn) {
@@ -140,111 +114,24 @@ app.get('/api/health', (req, res) => route(res, async () => {
   });
 }));
 
-app.get('/api/devices', (req, res) => route(res, async () => {
-  const grouped = await collection.aggregate([
-    { $sort: { timestamp: -1 } },
-    {
-      $group: {
-        _id: '$device_id',
-        device_type: { $first: '$device_type' },
-        location: { $first: '$location' },
-        last_seen: { $first: '$timestamp' },
-        latest: { $first: '$$ROOT' },
-      },
-    },
-  ]).toArray();
-  const byId = new Map(grouped.map((row) => [row._id, row]));
-  const known = new Set(devices.map((device) => device.device_id));
-  const extras = grouped.filter((row) => !known.has(row._id)).map((row) => ({
-    device_id: row._id,
-    device_type: row.device_type,
-    location: row.location,
-  }));
-  const list = [...devices, ...extras].map((device) => {
-    const row = byId.get(device.device_id);
-    const lastSeen = row ? row.last_seen : null;
-    return {
-      id: device.device_id,
-      type: row ? row.device_type : device.device_type,
-      location: row ? row.location : device.location,
-      last_seen: lastSeen ? new Date(lastSeen).toISOString() : null,
-      status: deviceStatus(lastSeen),
-      latest: row ? serializeReading(row.latest) : null,
-    };
-  });
-  res.json({ devices: list });
-}));
-
 app.get('/api/telemetry/latest', (req, res) => route(res, async () => {
-  const filter = {};
-  if (req.query.device_id) {
-    if (!/^[A-Za-z0-9_-]{1,64}$/.test(String(req.query.device_id))) {
-      throw httpError(400, 'device_id is invalid');
-    }
-    filter.device_id = String(req.query.device_id);
+  const filter = { device_id: HOME_HUB.device_id };
+  if (req.query.device_id !== undefined && String(req.query.device_id) !== HOME_HUB.device_id) {
+    throw httpError(400, 'device_id is invalid');
   }
   const reading = await collection.find(filter).sort({ timestamp: -1 }).limit(1).next();
   res.json({ reading: serializeReading(reading) });
 }));
 
-app.get('/api/telemetry', (req, res) => route(res, async () => {
+app.get('/api/telemetry/alerts', (req, res) => route(res, async () => {
   const { page, limit, skip } = pagination(req.query);
-  const filter = telemetryFilter(req.query);
-  const [total, items] = await Promise.all([
-    collection.countDocuments(filter),
-    collection.find(filter).sort({ timestamp: -1 }).skip(skip).limit(limit).toArray(),
-  ]);
-  res.json({ page, limit, total, items: items.map(serializeReading) });
-}));
-
-app.get('/api/telemetry/series', (req, res) => route(res, async () => {
-  const deviceId = String(req.query.device_id || '');
-  if (!/^[A-Za-z0-9_-]{1,64}$/.test(deviceId)) {
-    throw httpError(400, 'device_id is required');
-  }
-  const metric = String(req.query.metric || '');
-  const field = METRICS[metric];
-  if (!field) throw httpError(400, 'metric is not allowed');
-  const bucket = String(req.query.bucket || 'minute');
-  if (bucket !== 'minute' && bucket !== 'hour') {
-    throw httpError(400, 'bucket must be minute or hour');
-  }
-  const from = parseDate(req.query.from, 'from') || new Date(Date.now() - 6 * 60 * 60 * 1000);
-  const to = parseDate(req.query.to, 'to') || new Date();
-  if (from > to) throw httpError(400, 'from must be before to');
-
-  const points = await collection.aggregate([
-    { $match: { device_id: deviceId, timestamp: { $gte: from, $lte: to } } },
-    {
-      $group: {
-        _id: { $dateTrunc: { date: '$timestamp', unit: bucket } },
-        avg: { $avg: `$${field}` },
-        min: { $min: `$${field}` },
-        max: { $max: `$${field}` },
-        count: { $sum: 1 },
-      },
-    },
-    { $sort: { _id: 1 } },
-    { $limit: 500 },
-  ], { readPreference: new ReadPreference('secondaryPreferred') }).toArray();
-
-  res.json({
-    device_id: deviceId,
-    metric,
-    bucket,
-    points: points.map((point) => ({
-      bucket: point._id instanceof Date ? point._id.toISOString() : point._id,
-      avg: point.avg,
-      min: point.min,
-      max: point.max,
-      count: point.count,
-    })),
-  });
-}));
-
-app.get('/api/alerts', (req, res) => route(res, async () => {
-  const { page, limit, skip } = pagination(req.query);
-  const filter = { alert: true };
+  const filter = {
+    device_id: HOME_HUB.device_id,
+    $or: [
+      { 'telemetry.float_switches.high_level_overflow': true },
+      { 'telemetry.float_switches.low_level_dry_run': true },
+    ],
+  };
   if (req.query.reason) {
     const reason = String(req.query.reason);
     const allowed = new Set(Object.values(ALERT));
@@ -258,89 +145,128 @@ app.get('/api/alerts', (req, res) => route(res, async () => {
   res.json({ page, limit, total, items: items.map(serializeReading) });
 }));
 
-app.get('/api/analytics/averages', (req, res) => route(res, async () => {
+app.get('/api/telemetry/analytics/averages', (req, res) => route(res, async () => {
   const rows = await collection.aggregate([
     {
       $group: {
         _id: '$device_id',
         device_type: { $first: '$device_type' },
         readings: { $sum: 1 },
-        avg_water_level: { $avg: '$water_tank.ultrasonic_depth_pct' },
-        avg_temp: { $avg: '$climate.temperature_c' },
-        avg_power: { $avg: '$power_meter.power_w' },
+        avg_water_level: { $avg: LEVEL_FIELD },
+        avg_volume_litres: { $avg: '$telemetry.water_tank.volume_litres' },
         alert_count: { $sum: { $cond: ['$alert', 1, 0] } },
       },
     },
     { $sort: { _id: 1 } },
-  ], { readPreference: new ReadPreference('secondaryPreferred') }).toArray();
+  ], secondary).toArray();
   res.json({
     devices: rows.map((row) => ({
       device_id: row._id,
       device_type: row.device_type,
       readings: row.readings,
       avg_water_level: row.avg_water_level,
-      avg_temp: row.avg_temp,
-      avg_power: row.avg_power,
+      avg_volume_litres: row.avg_volume_litres,
       alert_count: row.alert_count,
     })),
   });
 }));
 
-app.get('/api/analytics/alerts-hourly', (req, res) => route(res, async () => {
-  const rows = await collection.aggregate([
-    { $match: { alert: true } },
-    { $unwind: '$alert_reasons' },
-    {
-      $group: {
-        _id: {
-          hour: { $dateTrunc: { date: '$timestamp', unit: 'hour' } },
-          reason: '$alert_reasons',
+app.get('/api/telemetry/history', (req, res) => route(res, async () => {
+  const bucket = req.query.bucket === undefined ? null : String(req.query.bucket);
+  if (bucket !== null && bucket !== 'minute' && bucket !== 'hour') {
+    throw httpError(400, 'bucket must be minute or hour');
+  }
+  const timestamp = timeRange(req.query, bucket ? new Date(Date.now() - 6 * 60 * 60 * 1000) : null);
+  const match = { device_id: HOME_HUB.device_id };
+  if (timestamp) match.timestamp = timestamp;
+
+  if (bucket) {
+    const points = await collection.aggregate([
+      { $match: match },
+      {
+        $group: {
+          _id: { $dateTrunc: { date: '$timestamp', unit: bucket } },
+          avg: { $avg: LEVEL_FIELD },
+          min: { $min: LEVEL_FIELD },
+          max: { $max: LEVEL_FIELD },
+          count: { $sum: 1 },
         },
-        count: { $sum: 1 },
       },
-    },
-    { $sort: { '_id.hour': -1, count: -1 } },
-    { $limit: 48 },
-  ], { readPreference: new ReadPreference('secondaryPreferred') }).toArray();
-  res.json({
-    buckets: rows.map((row) => ({
-      hour: row._id.hour instanceof Date ? row._id.hour.toISOString() : row._id.hour,
-      reason: row._id.reason,
-      count: row.count,
-    })),
-  });
+      { $sort: { _id: 1 } },
+      { $limit: 500 },
+    ], secondary).toArray();
+    res.json({
+      device_id: HOME_HUB.device_id,
+      bucket,
+      points: points.map((point) => ({
+        bucket: point._id instanceof Date ? point._id.toISOString() : point._id,
+        avg: point.avg,
+        min: point.min,
+        max: point.max,
+        count: point.count,
+      })),
+    });
+    return;
+  }
+
+  const { page, limit, skip } = pagination(req.query);
+  const [total, items] = await Promise.all([
+    collection.countDocuments(match),
+    collection.find(match).sort({ timestamp: -1 }).skip(skip).limit(limit).toArray(),
+  ]);
+  res.json({ page, limit, total, items: items.map(serializeReading) });
 }));
 
-app.get('/api/stats', (req, res) => route(res, async () => {
-  const hourAgo = new Date(Date.now() - 60 * 60 * 1000);
-  const onlineSince = new Date(Date.now() - 30_000);
-  const [totalDocuments, documentsLastHour, activeAlerts, onlineRows] = await Promise.all([
-    collection.countDocuments({}),
-    collection.countDocuments({ timestamp: { $gte: hourAgo } }),
-    collection.countDocuments({ alert: true, timestamp: { $gte: hourAgo } }),
+app.get('/api/telemetry/summary', (req, res) => route(res, async () => {
+  const now = Date.now();
+  const latest = await collection.find({ device_id: HOME_HUB.device_id }).sort({ timestamp: -1 }).limit(1).next();
+  const previous = latest
+    ? await collection.find({
+      device_id: HOME_HUB.device_id,
+      timestamp: { $lt: latest.timestamp },
+    }).sort({ timestamp: -1 }).limit(1).next()
+    : null;
+  const hourAgo = new Date(now - 60 * 60 * 1000);
+  const windowStart = new Date(now - 15 * 60 * 1000);
+  const [hourRows, windowDocs] = await Promise.all([
     collection.aggregate([
-      { $match: { timestamp: { $gte: onlineSince } } },
-      { $group: { _id: '$device_id' } },
-      { $count: 'devices' },
+      { $match: { device_id: HOME_HUB.device_id, timestamp: { $gte: hourAgo } } },
+      {
+        $group: {
+          _id: null,
+          min: { $min: LEVEL_FIELD },
+          max: { $max: LEVEL_FIELD },
+        },
+      },
     ]).toArray(),
+    collection.find({
+      device_id: HOME_HUB.device_id,
+      timestamp: { $gte: windowStart },
+    }).sort({ timestamp: 1 }).limit(500).toArray(),
   ]);
+  const hour = hourRows[0] || {};
   res.json({
-    total_documents: totalDocuments,
-    documents_last_hour: documentsLastHour,
-    active_alerts: activeAlerts,
-    devices_online: onlineRows[0] ? onlineRows[0].devices : 0,
+    reading: serializeReading(latest),
+    ...deriveInsight({
+      latest,
+      previous,
+      windowDocs,
+      hourMin: hour.min,
+      hourMax: hour.max,
+      now,
+    }),
   });
 }));
 
 function startMqtt() {
   const mqttClient = mqtt.connect(MQTT_URL, {
     reconnectPeriod: 2000,
-    clientId: `iothings-ingest-${process.pid}`,
+    clientId: `smart-tank-ingest-${process.pid}`,
   });
   mqttClient.on('connect', () => {
-    mqttClient.subscribe('iothings/+/+/telemetry', { qos: 1 }, (err) => {
+    mqttClient.subscribe(TELEMETRY_TOPIC, { qos: 1 }, (err) => {
       if (err) console.error('[ingest] subscribe failed', err.message);
-      else console.log(`[ingest] subscribed iothings/+/+/telemetry via ${MQTT_URL}`);
+      else console.log(`[ingest] subscribed ${TELEMETRY_TOPIC} via ${MQTT_URL}`);
     });
   });
   mqttClient.on('error', (err) => {
@@ -361,9 +287,19 @@ function startMqtt() {
     }
     try {
       const doc = toStoredReading(payload);
+      const previous = await collection
+        .find({ device_id: HOME_HUB.device_id })
+        .sort({ timestamp: -1 })
+        .limit(1)
+        .next();
       await collection.insertOne(doc, { writeConcern: { w: 'majority' } });
       const flag = doc.alert ? ` alert=${doc.alert_reasons.join(',')}` : '';
       console.log(`[ingest] stored ${doc.device_id} ${doc.timestamp.toISOString()}${flag}`);
+      try {
+        await notifyAlertTransition(previous, doc);
+      } catch (err) {
+        console.error('[telegram] send failed', err.message);
+      }
     } catch (err) {
       console.error('[ingest] insert failed', err.message);
     }
@@ -372,9 +308,9 @@ function startMqtt() {
 
 async function main() {
   await client.connect();
-  collection = client.db('iothings').collection('sensor_readings');
+  collection = client.db(DB_NAME).collection(COLLECTION);
   await ensureIndexes(collection);
-  console.log('[api] indexes ensured on iothings.sensor_readings');
+  console.log(`[api] indexes ensured on ${DB_NAME}.${COLLECTION}`);
   app.listen(PORT, () => {
     console.log(`[api] listening on http://localhost:${PORT}`);
   });

@@ -1,84 +1,62 @@
 # Presentation outline
 
-INPER presentation, 40% of the module. Aim for 12–14 slides plus a live demo. Rehearse the failover before the session so the election pause is expected.
+Ten to fifteen minutes. Do not say “zero downtime”. The failover sentence is: automatic failover with no acknowledged-write loss; brief write pause during election (~10 s).
 
 ## Slide 1 — Title
 
-- Project title, module CMP6207, your name.
-- One line: synthetic tank, climate, and power telemetry on a MongoDB replica set.
+Smart Tank Automation. One home tank, MongoDB replica set, MQTT.
 
 ## Slide 2 — Problem
 
-- Three payload shapes, readings every few seconds.
-- Need queries by device and time, alerts, and a service that continues after one database process stops.
+A tank that overflows or runs dry needs a stored history and a warning, and the store should still hold acknowledged writes if one database process stops.
 
 ## Slide 3 — Why a document store
 
-- One collection, embedded sensor objects, no null-heavy table.
-- Show a cropped tank document and a cropped climate document side by side.
+One MQTT message is one document. Level, floats, and actuator strings sit under `telemetry`. A relational design would split or null-pad that same message.
 
 ## Slide 4 — Architecture
 
-- Diagram from `plan/02-architecture.md`: simulator, Mosquitto, Node, `rs0`, React.
-- Say the replica set is for availability, not for horizontal scaling.
+Simulator → Mosquitto `iothings/home/telemetry` → Express → `smart_water.sensor_activations` on `rs0` → React. Telegram is a side effect of an alert transition, not a second database.
 
 ## Slide 5 — Replica set
 
-- Three `mongod` processes, ports 27117 (priority 2), 27118, 27119.
-- Majority write concern. Analytics use `secondaryPreferred`.
-- Sentence to say aloud: automatic failover with no acknowledged-write loss; brief write pause during election (~10 s).
+Three members, ports 27017 (priority 2), 27018, and 27019. Availability, not sharding. Every member holds a full copy. Writes enter through the primary.
 
 ## Slide 6 — Document model and alerts
 
-- Shared fields plus type-specific objects.
-- Alert rules: overflow, dry-run, temperature above 35 °C, power above 3500 W.
-- TTL of 30 days and why the data is synthetic (storage limitation).
+Show one document. Overflow at or above 85%. Dry-run at or below 25%. Valve `CLOSED` only when high. Pump `EMERGENCY_STOP` only when low. Firmware `v2.4.1`.
 
 ## Slide 7 — API
 
-- Short table of the GET routes.
-- Mention metric whitelist on `/api/telemetry/series` and limit cap of 100.
+Latest, alerts, averages, history, summary, health. Summary is trend, litres per hour, and a rough time-to-empty or time-to-full. Averages use `secondaryPreferred`.
 
 ## Slide 8 — Live demo: dashboard
 
-- Open `http://localhost:5173`.
-- Point at tank gauges (percent, litres, valve, pump, floats), climate and power cards, alert feed, “last updated” pulse.
-- If the simulator is running, wait for one value to change.
+Open `/`. Point at percent, litres, the rising/falling/steady word, and the 25% and 85% marks. Click **Arm siren** before the overflow, then show **Silence**.
 
-## Slide 9 — Live demo: telemetry and alerts
+## Slide 9 — Live demo: history and alerts
 
-- Filter to `TANK_01`, switch minute/hour bucket, export CSV.
-- Open alerts and the hourly chart.
+`/history` chart and CSV. `/alerts` filtered to overflow. Mention the single Telegram message, not a message per reading.
 
 ## Slide 10 — Index evidence
 
-- Show benchmark output: `docsExamined` and `keysExamined` for `$natural` versus `device_time`.
-- One sentence: the index avoids scanning the whole history for the latest 50 readings.
+`npm run benchmark` for `HOME_HUB_01`. Collection scan versus `device_time`.
 
 ## Slide 11 — Failover evidence
 
-- Leave `/cluster` visible (it polls every 2 s).
-- Stop the primary `mongod` (usually port 27117).
-- Wait through the election. Read the banner: “Failover detected: new primary …”.
-- Show node cards: one PRIMARY, one member down, one SECONDARY.
-- Restart the stopped process and show it return as a secondary.
-- Do not say the write path had zero downtime.
+Leave `/cluster` open. Stop the primary. Read the banner `Failover detected: new primary …`. Mention the brief write pause. Restart the member so it rejoins as a secondary.
 
 ## Slide 12 — Limitations
 
-- Single host: this does not survive a machine failure.
-- Anonymous local MQTT.
-- QoS 1 can duplicate inserts.
-- Secondaries can be slightly behind.
-- A replica set does not shard the data.
+One machine. Anonymous MQTT. QoS 1 can duplicate an insert. The siren needs a user click. The replica set is not a shard cluster.
 
 ## Slide 13 — Questions
 
-- Backup slides: sample JSON, `rs.status()`, explain output.
+Seed file is 1200 synthetic documents and does not load MongoDB by itself. TTL is 30 days.
 
 ## Demo checklist the night before
 
-- Hosts file is not required.
-- Ports 27117–27119 are listening and `rs.status()` shows 1 PRIMARY and 2 SECONDARY.
-- Seed has been run. Simulator and API are up. Frontend proxy reaches port 3000.
-- You know which terminal owns the primary so you stop the right process.
+- Three `mongod` processes, `rs.status()` shows one PRIMARY.
+- Mosquitto on 1883, `npm run server`, `npm run simulator`, `cd web && npm run dev`.
+- `.env` has the Telegram values if you want the phone to buzz. Do not put the token on a slide.
+- Browser tab has had **Arm siren** clicked if you will cross 85%.

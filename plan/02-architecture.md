@@ -4,15 +4,17 @@
 
 ```mermaid
 flowchart LR
-  sim[Simulator]
-  mqtt[Mosquitto]
+  sim[HOME_HUB_01]
+  mqtt[Mosquitto_1883]
   api[Express_ingestion]
   rs0[MongoDB_rs0]
   web[React_dashboard]
+  tg[Telegram]
 
   sim -->|"QoS 1 telemetry"| mqtt
   mqtt --> api
   api -->|"majority insert"| rs0
+  api -->|"alert transition"| tg
   web -->|"REST /api"| api
   api -->|"primary reads"| rs0
   api -->|"secondaryPreferred analytics"| rs0
@@ -20,128 +22,37 @@ flowchart LR
 
 ## Data flow
 
-1. `src/simulator.js` builds a payload per device and publishes JSON.
-2. Mosquitto delivers `iothings/+/+/telemetry` to `src/server.js`.
-3. The server validates `device_id`, `device_type`, `timestamp`, and a `telemetry` object.
-4. Type-specific fields are stored at the top level of the document (the `telemetry` wrapper is not kept).
-5. Alerts and `ingested_at` are added. `insertOne` waits for majority acknowledgement.
-6. The React app calls `/api/*`. Vite proxies `/api` to `http://localhost:3000`.
+1. `src/simulator.js` builds one nested tank payload and publishes it to `iothings/home/telemetry`.
+2. `src/server.js` parses JSON, rejects anything that is not `HOME_HUB_01` with a tank object, and inserts with `w: "majority"`.
+3. If the alert set changed, `src/lib/telegram.js` calls `sendMessage`. The insert has already succeeded.
+4. The dashboard polls summary, history, alerts, and health. The siren runs only in the browser, after **Arm siren**.
 
 ## Replica set topology
 
-Members, all on this machine:
-
-| Member | Port | Priority | Usual role |
+| Member | Port | Priority | Data directory |
 | --- | --- | --- | --- |
-| localhost | 27117 | 2 | Preferred primary |
-| localhost | 27118 | 1 | Secondary |
-| localhost | 27119 | 1 | Secondary |
+| localhost:27017 | 27017 | 2 | `./mongo-cluster/node1` |
+| localhost:27018 | 27018 | 1 | `./mongo-cluster/node2` |
+| localhost:27019 | 27019 | 1 | `./mongo-cluster/node3` |
 
-```mermaid
-flowchart TB
-  primary["localhost:27117 priority 2"]
-  secA["localhost:27118 priority 1"]
-  secB["localhost:27119 priority 1"]
-  primary -->|"oplog"| secA
-  primary -->|"oplog"| secB
-```
+Set name `rs0`. Database `smart_water`. Collection `sensor_activations`.
 
-If the process on 27117 stops, the remaining members elect a new primary. Acknowledged majority writes are not rolled back. Clients see a brief write pause during election (~10 s). When 27117 starts again it rejoins, usually as a secondary, until its higher priority triggers another election.
+`scripts/replica-init.js` calls `rs.initiate` only when the connected `mongod` is not yet a replica set and has no user databases. If it is already this `rs0` with these three hosts, it prints member states and does nothing else. Any other set name, member list, or existing user database is a refusal.
 
-An existing `mongod` on port 27017 is not part of `rs0` and must not be stopped or reconfigured.
-
-Docker Compose is optional and publishes 27217–27219 so it does not collide with 27017 or with this replica set.
+Failover wording for the report and the slides: automatic failover with no acknowledged-write loss; brief write pause during election (~10 s).
 
 ## Topic naming
 
-| Topic | Direction | QoS |
-| --- | --- | --- |
-| `iothings/<device_type>/<device_id>/telemetry` | device → broker → ingestion | 1 |
-
-`device_type` is `water_tank`, `climate`, or `power_meter`.
+One topic: `iothings/home/telemetry`. The broker is the local Mosquitto URL from `MQTT_URL`.
 
 ## Frontend component tree
 
-```mermaid
-flowchart TB
-  app[App]
-  shell[AppShell]
-  app --> shell
-  shell --> dash[Dashboard]
-  shell --> devices[DevicesPage]
-  shell --> telem[TelemetryPage]
-  shell --> alerts[AlertsPage]
-  shell --> cluster[ClusterPage]
-  shell --> analytics[AnalyticsPage]
-  dash --> gauge[TankGauge]
-  dash --> stat[StatCard]
-  devices --> table[DataTable]
-  devices --> drawer[DetailDrawer]
-```
+- `AppShell` — navigation, theme, API badge, `SirenControl`
+- `Dashboard` — KPIs, `TankGauge`, sparkline, alert feed, cluster mini-status
+- `HistoryPage` — level chart, table, CSV
+- `AlertsPage` — overflow and dry-run list
+- `ClusterPage` — member cards, failover banner, in-memory log
 
 ## Stored documents
 
-Collection: `iothings.sensor_readings`. Shared fields: `device_id`, `device_type`, `location`, `timestamp` (BSON Date), `metadata`, `alert_reasons`, `alert`, `ingested_at`.
-
-Water tank:
-
-```json
-{
-  "device_id": "TANK_01",
-  "device_type": "water_tank",
-  "location": "roof",
-  "timestamp": "2026-10-01T12:00:00.000Z",
-  "metadata": { "firmware": "v2.4.1", "signal_rssi": -62 },
-  "water_tank": {
-    "ultrasonic_depth_pct": 72.4,
-    "volume_litres": 1448,
-    "distance_cm": 41.4
-  },
-  "float_switches": { "high_level_overflow": false, "low_level_dry_run": false },
-  "actuator_states": { "inlet_valve": "CLOSED", "booster_pump": "ACTIVE" },
-  "alert_reasons": [],
-  "alert": false,
-  "ingested_at": "2026-10-01T12:00:00.200Z"
-}
-```
-
-Climate:
-
-```json
-{
-  "device_id": "CLIMATE_01",
-  "device_type": "climate",
-  "location": "living_room",
-  "timestamp": "2026-10-01T12:00:03.000Z",
-  "metadata": { "firmware": "v2.4.1", "signal_rssi": -71 },
-  "climate": { "temperature_c": 36.2, "humidity_pct": 58, "co2_ppm": 940 },
-  "alert_reasons": ["HIGH_TEMPERATURE"],
-  "alert": true,
-  "ingested_at": "2026-10-01T12:00:03.180Z"
-}
-```
-
-Power meter:
-
-```json
-{
-  "device_id": "POWER_01",
-  "device_type": "power_meter",
-  "location": "main_panel",
-  "timestamp": "2026-10-01T12:00:06.000Z",
-  "metadata": { "firmware": "v2.4.1", "signal_rssi": -55 },
-  "power_meter": {
-    "voltage_v": 238.1,
-    "power_w": 3720,
-    "current_a": 15.62,
-    "energy_kwh_total": 128.4
-  },
-  "alert_reasons": ["POWER_SPIKE"],
-  "alert": true,
-  "ingested_at": "2026-10-01T12:00:06.160Z"
-}
-```
-
-`volume_litres` is `2000 * ultrasonic_depth_pct / 100`. `distance_cm` is the gap from a sensor at the top of a 150 cm tank down to the water surface.
-
-Different devices omit fields they do not measure. That is the schema-flexibility point: one collection, no migration when a new sensor key appears.
+`telemetry` stays nested. Top-level fields are identity, time, metadata, alerts, and `ingested_at`. Level, litres, distance, floats, and actuator strings live under `telemetry`.
