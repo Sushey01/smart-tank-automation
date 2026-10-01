@@ -1,10 +1,21 @@
 # Smart Tank Automation
 
-Fault-tolerant NoSQL telemetry for a synthetic building: two water tanks, a plant-room climate sensor, and a power meter.
+Fault-tolerant NoSQL telemetry for a synthetic building: two water tanks, a living-room climate sensor, and a main-panel power meter.
 
 **Module:** CMP6207 Modern Data Stores
 
 Pipeline: simulated devices → MQTT (Mosquitto) → Node.js ingestion → 3-node MongoDB replica set `rs0` → Express API → React dashboard.
+
+## Devices
+
+| device_id | device_type | location | telemetry |
+| --- | --- | --- | --- |
+| TANK_01 | water_tank | roof | water_tank{ultrasonic_depth_pct 20-90, volume_litres from a 2000 L tank, distance_cm}, float_switches{high_level_overflow >=85, low_level_dry_run <=25}, actuator_states{inlet_valve OPEN/CLOSED, booster_pump ACTIVE/EMERGENCY_STOP} |
+| TANK_02 | water_tank | basement | same shape as TANK_01 |
+| CLIMATE_01 | climate | living_room | temperature_c, humidity_pct, co2_ppm |
+| POWER_01 | power_meter | main_panel | voltage_v, power_w, current_a, energy_kwh_total |
+
+Every document also has `device_id`, `device_type`, `location`, `timestamp` (BSON Date), `metadata` (`firmware` `v2.4.1`, `signal_rssi`), plus server-added `alert_reasons`, `alert`, and `ingested_at`.
 
 A replica set provides high availability. It is not sharding and it does not scale writes with the number of nodes. If the primary stops, the set elects a new one: automatic failover with no acknowledged-write loss; brief write pause during election (~10 s).
 
@@ -107,7 +118,7 @@ Base URL `http://localhost:3000`. CORS allows `http://localhost:5173`. Paginated
 | Method | Path | Role |
 | --- | --- | --- |
 | GET | `/api/health` | `replSetGetStatus`: set name, primary, member state and health |
-| GET | `/api/devices` | Last reading per device; online if seen within 30 s, else stale or offline |
+| GET | `/api/devices` | Last reading per device; online if last seen is under 30 s, otherwise offline |
 | GET | `/api/telemetry/latest?device_id=` | Newest document, optionally for one device |
 | GET | `/api/telemetry` | Filter by device, type, and `from`/`to`, with `page` and `limit` |
 | GET | `/api/telemetry/series` | `$dateTrunc` average/min/max for a whitelisted metric |
@@ -115,7 +126,6 @@ Base URL `http://localhost:3000`. CORS allows `http://localhost:5173`. Paginated
 | GET | `/api/analytics/averages` | Per-device counts and averages (`secondaryPreferred`) |
 | GET | `/api/analytics/alerts-hourly` | Alert reasons by hour (`secondaryPreferred`) |
 | GET | `/api/stats` | Collection size, last hour, active alerts, devices online |
-| POST | `/api/devices/:id/commands` | `{ "command": "pump_on" \| "pump_off" \| "valve_open" \| "valve_close" }` for water tanks |
 
 Series metrics: `ultrasonic_depth_pct`, `volume_litres`, `distance_cm`, `temperature_c`, `humidity_pct`, `co2_ppm`, `voltage_v`, `power_w`, `current_a`, `energy_kwh_total`.
 

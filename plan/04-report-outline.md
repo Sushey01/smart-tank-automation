@@ -14,7 +14,7 @@ Target structure for the written report. Word counts are the brief’s size for 
 
 ## 3. Introduction (~300 words)
 
-- Problem: a building stores roof and basement water tanks, a plant-room climate sensor, and a power meter. Readings arrive every few seconds and do not share one column layout.
+- Problem: a building stores roof and basement water tanks, a living-room climate sensor, and a main-panel power meter. Readings arrive every few seconds and do not share one column layout.
 - Aim: ingest MQTT telemetry into MongoDB, query it over HTTP, and keep serving after one replica stops.
 - Method: synthetic devices, Mosquitto, a three-node replica set on localhost, Express, a React dashboard.
 - Contribution boundary: availability via replication, not sharding. Failover has a brief write pause during election (~10 s). Acknowledged majority writes are kept.
@@ -57,7 +57,7 @@ Target structure for the written report. Word counts are the brief’s size for 
 - Pagination: `page`, `limit` capped at 100, `total` in the body.
 - Validation: 400 for bad dates, unknown `metric`, unknown `bucket`, unknown alert `reason`.
 - Series metrics are a whitelist so a query parameter cannot choose an arbitrary field path.
-- Stretch command route: allowed verbs `pump_on`, `pump_off`, `valve_open`, `valve_close`, water-tank devices only.
+- Actuator fields are strings: inlet valve `OPEN` or `CLOSED`, booster pump `ACTIVE` or `EMERGENCY_STOP`. There is no command API.
 
 ## 8. Conclusion and future work (~300 words)
 

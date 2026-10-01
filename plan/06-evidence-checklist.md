@@ -23,7 +23,6 @@ Capture these before submission. Store images in a folder you do not commit if t
 - [ ] Postman or browser for each GET route: health, devices, telemetry latest, telemetry page, series, alerts, averages, alerts-hourly, stats.
 - [ ] A 400 response for `GET /api/telemetry?from=not-a-date`.
 - [ ] Smoke-test terminal output (`node src/smoke.js`) with every line PASS.
-- [ ] Optional: command POST and the next tank payload showing the actuator change.
 
 ## UI
 

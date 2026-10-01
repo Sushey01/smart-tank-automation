@@ -21,7 +21,7 @@ Base URL is empty in development so Vite proxies `/api` to `http://localhost:300
 
 - `GET /api/health` → `{ set, primary, members: [{ name, state, health, isPrimary }], checkedAt }`
 - `GET /api/devices` → `{ devices: [{ id, type, location, last_seen, status, latest }] }`
-- `status` is `online` if `last_seen` is under 30 s, `stale` if under 5 min, otherwise `offline`.
+- `status` is `online` if `last_seen` is under 30 s, otherwise `offline`.
 - `GET /api/telemetry/latest?device_id=` → `{ reading }`
 - `GET /api/telemetry` → `{ page, limit, total, items }`
 - `GET /api/telemetry/series?device_id&metric&from&to&bucket` → `{ device_id, metric, bucket, points: [{ bucket, avg, min, max, count }] }`
@@ -30,7 +30,6 @@ Base URL is empty in development so Vite proxies `/api` to `http://localhost:300
 - `GET /api/analytics/averages` → `{ devices: [{ device_id, device_type, readings, avg_water_level, avg_temp, avg_power, alert_count }] }`
 - `GET /api/analytics/alerts-hourly` → `{ buckets: [{ hour, reason, count }] }`
 - `GET /api/stats` → `{ total_documents, documents_last_hour, active_alerts, devices_online }`
-- `POST /api/devices/:id/commands` body `{ command }` → `{ ok, device_id, command, topic, publishedAt }`
 
 Errors: `{ error: string }` with HTTP 400 or 500. Network failure is surfaced as “Backend unreachable”.
 
@@ -51,7 +50,7 @@ Defined in `web/tailwind.config.js` and `web/src/index.css`.
 
 - `AppShell`, `Sidebar`, `Topbar` (theme toggle, API status).
 - `StatCard`, `TankGauge`, `StatusBadge`, `DataTable`, `Sparkline`.
-- `EmptyState`, `ErrorState`, `Skeleton`, `Toast`, `ConfirmDialog`.
+- `EmptyState`, `ErrorState`, `Skeleton`, `Toast`.
 - `BackendDown` when `/api/health` cannot be reached.
 - API modules in `web/src/api/`, types in `web/src/types.ts`.
 
@@ -59,7 +58,6 @@ Defined in `web/tailwind.config.js` and `web/src/index.css`.
 
 - Mobile under `md`: sidebar hidden, bottom navigation shown. Layout checked at 375 px, tablet, and 1440 px.
 - Focus rings use the brand colour. Gauges and charts have `aria-label`s. Dialogs close on Escape.
-- Tank commands open a confirm dialog, then a toast with the API result.
 - Telemetry CSV is built in the browser from the current page of rows.
 - Device drawer shows collapsible pretty-printed JSON.
 

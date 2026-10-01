@@ -3,9 +3,9 @@
 - [x] Write planning documents `plan/00` through `plan/09`
 - [x] Add `.gitignore` for `node_modules/`, `.env`, `mongo-cluster/`, `dist/`, logs
 - [x] Add root `package.json` with `express`, `mongodb`, `mqtt`, `cors`
-- [x] Implement `src/lib/devices.js` (registry, payloads, alerts, commands)
+- [x] Implement `src/lib/devices.js` (registry, payloads, alerts)
 - [x] Implement `src/lib/indexes.js` (query indexes and 30-day TTL)
-- [x] Implement `src/simulator.js` (independent timers, QoS 1, command subscriber)
+- [x] Implement `src/simulator.js` (independent timers, QoS 1)
 - [x] Implement `src/server.js` (ingest, majority writes, REST, CORS)
 - [x] Implement `src/seed.js` and `src/benchmark.js`
 - [x] Implement `src/smoke.js` for every GET route

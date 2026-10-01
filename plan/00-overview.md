@@ -31,6 +31,7 @@ In scope:
 Out of scope:
 
 - Sharding and horizontal scaling.
+- Actuator command endpoints. Valve and pump states are telemetry fields only.
 - Production MQTT authentication, TLS, or a public broker.
 - Real sensors, real personal data, or multi-host deployment.
 - A claim of uninterrupted writes during an election.

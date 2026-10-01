@@ -4,8 +4,8 @@
 
 1. Simulate four devices with three payload shapes:
    - `TANK_01` (roof) and `TANK_02` (basement): water level, floats, inlet valve, booster pump.
-   - `CLIMATE_01` (plant room): temperature, humidity, CO2.
-   - `POWER_01` (electrical cupboard): voltage, power, current, cumulative energy.
+   - `CLIMATE_01` (living_room): temperature, humidity, CO2.
+   - `POWER_01` (main_panel): voltage, power, current, cumulative energy.
 2. Each device publishes on its own timer to `iothings/<device_type>/<device_id>/telemetry` at QoS 1, with a random gap of 2000–8999 ms.
 3. Ingestion subscribes to `iothings/+/+/telemetry`, rejects invalid messages, converts `timestamp` to a BSON `Date`, computes `alert_reasons` and `alert`, and inserts into `iothings.sensor_readings`.
 4. Alert codes: `TANK_OVERFLOW` (depth ≥ 85 or high float), `TANK_DRY_RUN` (depth ≤ 25 or low float), `HIGH_TEMPERATURE` (temperature above 35 °C), `POWER_SPIKE` (power above 3500 W).
@@ -19,7 +19,6 @@
    - `GET /api/analytics/averages`
    - `GET /api/analytics/alerts-hourly`
    - `GET /api/stats`
-   - Stretch: `POST /api/devices/:id/commands` for pump and valve commands.
 6. Seed script loads a chosen total (default 10,000), split evenly, with monotonic 2–9 s gaps ending near the current time, in batches of 5,000. It writes `synthetic_sensor_dataset_sample.json` (first 200 documents).
 7. Benchmark script prints `explain('executionStats')` for a recent-readings query with a collection scan hint and with the `device_time` index.
 8. React UI: dashboard, devices, telemetry, alerts, cluster (failover evidence), analytics.
@@ -46,6 +45,6 @@ The working build uses the numbers below. Before submission, check the official 
 | Device count | 4 devices, 3 types | |
 | Seeded record count | 10,000 (`node src/seed.js [total]`) | |
 | Live publish interval | 2–9 seconds, under 10 s | |
-| Minimum API endpoints | 9 GET routes listed above, plus command POST | |
+| Minimum API endpoints | 9 GET routes listed above | |
 | Replica set size | 3 members | |
 | Evidence screenshots | See `plan/06-evidence-checklist.md` | |
