@@ -1,0 +1,8 @@
+node_modules/
+.env
+logs/
+dist/
+mongo-cluster/
+.DS_Store
+*.log
+synthetic_sensor_dataset_sample.json
