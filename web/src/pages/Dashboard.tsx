@@ -2,7 +2,6 @@ import { useQuery } from '@tanstack/react-query';
 import { Activity, Bell, Database, Radio } from 'lucide-react';
 import { getAlerts } from '../api/alerts';
 import { getDevices } from '../api/devices';
-import { sendCommand } from '../api/devices';
 import { getHealth } from '../api/health';
 import { getStats } from '../api/stats';
 import { getSeries } from '../api/telemetry';
@@ -11,14 +10,11 @@ import { Sparkline } from '../components/Sparkline';
 import { StatCard } from '../components/StatCard';
 import { EmptyState, ErrorState, Skeleton } from '../components/States';
 import { TankGauge } from '../components/TankGauge';
-import { useToast } from '../components/toast-context';
 import { ageLabel, errorMessage, formatNumber, reasonLabel } from '../lib/format';
-import type { TankCommand } from '../types';
 
 const poll = { refetchInterval: 5000, refetchIntervalInBackground: false } as const;
 
 export function Dashboard() {
-  const toast = useToast();
   const stats = useQuery({ queryKey: ['stats'], queryFn: getStats, ...poll });
   const devices = useQuery({ queryKey: ['devices'], queryFn: getDevices, ...poll });
   const alerts = useQuery({ queryKey: ['alerts', 'dash'], queryFn: () => getAlerts({ limit: 8, page: 1 }), ...poll });
@@ -43,17 +39,6 @@ export function Dashboard() {
     }),
     ...poll,
   });
-
-  async function onCommand(deviceId: string, command: TankCommand) {
-    try {
-      const result = await sendCommand(deviceId, command);
-      toast.push(`${result.device_id}: ${command.replaceAll('_', ' ')} published`);
-      await devices.refetch();
-    } catch (error) {
-      toast.push(errorMessage(error), 'danger');
-      throw error;
-    }
-  }
 
   if (stats.isLoading || devices.isLoading) {
     return (
@@ -91,11 +76,11 @@ export function Dashboard() {
         <EmptyState title="No readings yet" body="Seed the collection or start the simulator so the gauges have a latest document." />
       )}
       <section className="grid gap-4 lg:grid-cols-2" aria-label="Water tanks">
-        {tanks.map((device) => <TankGauge key={device.id} device={device} onCommand={onCommand} />)}
+        {tanks.map((device) => <TankGauge key={device.id} device={device} />)}
       </section>
       <section className="grid gap-4 lg:grid-cols-2">
         <article className="card">
-          <h2 className="text-lg font-semibold">Plant room climate</h2>
+          <h2 className="text-lg font-semibold">Living room climate</h2>
           <p className="mt-1 font-mono text-2xl tabular-nums">
             {formatNumber(climateDevice?.latest?.climate?.temperature_c, 1)}°C
           </p>
@@ -103,11 +88,11 @@ export function Dashboard() {
             Humidity {formatNumber(climateDevice?.latest?.climate?.humidity_pct, 0)}% · CO₂ {formatNumber(climateDevice?.latest?.climate?.co2_ppm, 0)} ppm
           </p>
           <div className="mt-3">
-            <Sparkline points={climate.data?.points ?? []} label="Plant room temperature over the last hour" />
+            <Sparkline points={climate.data?.points ?? []} label="Living room temperature over the last hour" />
           </div>
         </article>
         <article className="card">
-          <h2 className="text-lg font-semibold">Power meter</h2>
+          <h2 className="text-lg font-semibold">Main panel power</h2>
           <p className="mt-1 font-mono text-2xl tabular-nums">
             {formatNumber(powerDevice?.latest?.power_meter?.power_w, 0)} W
           </p>

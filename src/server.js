@@ -11,13 +11,10 @@ const mqtt = require('mqtt');
 const { MongoClient, ReadPreference } = require('mongodb');
 const {
   ALERT,
-  COMMANDS,
   METRICS,
   devices,
-  findDevice,
   toStoredReading,
   validatePayload,
-  topicFor,
 } = require('./lib/devices');
 const { ensureIndexes } = require('./lib/indexes');
 
@@ -38,8 +35,6 @@ app.use(cors({ origin: 'http://localhost:5173' }));
 app.use(express.json({ limit: '32kb' }));
 
 let collection;
-let mqttClient;
-let mqttReady = false;
 
 function httpError(status, message) {
   const err = new Error(message);
@@ -88,9 +83,7 @@ function serializeReading(doc) {
 function deviceStatus(lastSeen) {
   if (!lastSeen) return 'offline';
   const age = Date.now() - new Date(lastSeen).getTime();
-  if (age < 30_000) return 'online';
-  if (age < 5 * 60_000) return 'stale';
-  return 'offline';
+  return age < 30_000 ? 'online' : 'offline';
 }
 
 function telemetryFilter(query) {
@@ -339,52 +332,16 @@ app.get('/api/stats', (req, res) => route(res, async () => {
   });
 }));
 
-app.post('/api/devices/:id/commands', (req, res) => route(res, async () => {
-  const device = findDevice(req.params.id);
-  if (!device) throw httpError(404, 'Unknown device');
-  if (device.device_type !== 'water_tank') {
-    throw httpError(400, 'Commands are only supported for water_tank devices');
-  }
-  const command = req.body && req.body.command;
-  if (!Object.prototype.hasOwnProperty.call(COMMANDS, command)) {
-    throw httpError(400, 'command must be pump_on, pump_off, valve_open, or valve_close');
-  }
-  if (!mqttClient || !mqttReady) throw httpError(503, 'MQTT broker is not connected');
-  const topic = topicFor(device, 'commands');
-  await new Promise((resolve, reject) => {
-    mqttClient.publish(
-      topic,
-      JSON.stringify({ command, requestedAt: new Date().toISOString() }),
-      { qos: 1 },
-      (err) => {
-        if (err) reject(err);
-        else resolve();
-      },
-    );
-  });
-  res.json({
-    ok: true,
-    device_id: device.device_id,
-    command,
-    topic,
-    publishedAt: new Date().toISOString(),
-  });
-}));
-
 function startMqtt() {
-  mqttClient = mqtt.connect(MQTT_URL, {
+  const mqttClient = mqtt.connect(MQTT_URL, {
     reconnectPeriod: 2000,
     clientId: `iothings-ingest-${process.pid}`,
   });
   mqttClient.on('connect', () => {
-    mqttReady = true;
     mqttClient.subscribe('iothings/+/+/telemetry', { qos: 1 }, (err) => {
       if (err) console.error('[ingest] subscribe failed', err.message);
       else console.log(`[ingest] subscribed iothings/+/+/telemetry via ${MQTT_URL}`);
     });
-  });
-  mqttClient.on('close', () => {
-    mqttReady = false;
   });
   mqttClient.on('error', (err) => {
     console.error('[ingest] mqtt error', err.message);

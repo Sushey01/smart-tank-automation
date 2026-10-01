@@ -1,9 +1,8 @@
-import { CheckCircle2, Clock3, CircleOff, Crown, Database } from 'lucide-react';
+import { CheckCircle2, CircleOff, Crown, Database } from 'lucide-react';
 import type { DeviceStatus } from '../types';
 
 const deviceMap: Record<DeviceStatus, { className: string; label: string; Icon: typeof CheckCircle2 }> = {
   online: { className: 'badge-ok', label: 'Online', Icon: CheckCircle2 },
-  stale: { className: 'badge-warn', label: 'Stale', Icon: Clock3 },
   offline: { className: 'badge-danger', label: 'Offline', Icon: CircleOff },
 };
 

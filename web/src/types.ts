@@ -1,8 +1,6 @@
-export type DeviceStatus = 'online' | 'stale' | 'offline';
+export type DeviceStatus = 'online' | 'offline';
 
 export type AlertReason = 'TANK_OVERFLOW' | 'TANK_DRY_RUN' | 'HIGH_TEMPERATURE' | 'POWER_SPIKE';
-
-export type TankCommand = 'pump_on' | 'pump_off' | 'valve_open' | 'valve_close';
 
 export interface SensorReading {
   _id?: string;
@@ -13,7 +11,7 @@ export interface SensorReading {
   metadata: { firmware: string; signal_rssi: number | null };
   water_tank?: { ultrasonic_depth_pct: number; volume_litres: number; distance_cm: number };
   float_switches?: { high_level_overflow: boolean; low_level_dry_run: boolean };
-  actuator_states?: { inlet_valve: boolean; booster_pump: boolean };
+  actuator_states?: { inlet_valve: 'OPEN' | 'CLOSED'; booster_pump: 'ACTIVE' | 'EMERGENCY_STOP' };
   climate?: { temperature_c: number; humidity_pct: number; co2_ppm: number };
   power_meter?: { voltage_v: number; power_w: number; current_a: number; energy_kwh_total: number };
   alert_reasons: AlertReason[];
@@ -87,14 +85,6 @@ export interface StatsResponse {
   documents_last_hour: number;
   active_alerts: number;
   devices_online: number;
-}
-
-export interface CommandResponse {
-  ok: boolean;
-  device_id: string;
-  command: TankCommand;
-  topic: string;
-  publishedAt: string;
 }
 
 export const ALERT_REASONS: AlertReason[] = [

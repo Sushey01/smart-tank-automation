@@ -13,12 +13,7 @@ const ALERT = {
   POWER_SPIKE: 'POWER_SPIKE',
 };
 
-const COMMANDS = {
-  pump_on: { booster_pump: true },
-  pump_off: { booster_pump: false },
-  valve_open: { inlet_valve: true },
-  valve_close: { inlet_valve: false },
-};
+const FIRMWARE = 'v2.4.1';
 
 const METRICS = {
   ultrasonic_depth_pct: 'water_tank.ultrasonic_depth_pct',
@@ -34,10 +29,10 @@ const METRICS = {
 };
 
 const devices = [
-  { device_id: 'TANK_01', device_type: 'water_tank', location: 'roof', firmware: '1.4.2' },
-  { device_id: 'TANK_02', device_type: 'water_tank', location: 'basement', firmware: '1.4.2' },
-  { device_id: 'CLIMATE_01', device_type: 'climate', location: 'plant_room', firmware: '2.1.0' },
-  { device_id: 'POWER_01', device_type: 'power_meter', location: 'electrical_cupboard', firmware: '3.0.1' },
+  { device_id: 'TANK_01', device_type: 'water_tank', location: 'roof' },
+  { device_id: 'TANK_02', device_type: 'water_tank', location: 'basement' },
+  { device_id: 'CLIMATE_01', device_type: 'climate', location: 'living_room' },
+  { device_id: 'POWER_01', device_type: 'power_meter', location: 'main_panel' },
 ];
 
 function rand(min, max) {
@@ -49,10 +44,6 @@ function round(value, digits = 1) {
   return Math.round(value * factor) / factor;
 }
 
-function findDevice(deviceId) {
-  return devices.find((device) => device.device_id === deviceId) || null;
-}
-
 function waterLevelPct() {
   const roll = Math.random();
   if (roll < 0.08) return rand(85, 90);
@@ -60,14 +51,12 @@ function waterLevelPct() {
   return rand(26, 84);
 }
 
-function buildWaterTelemetry(overrides = {}) {
+function buildWaterTelemetry() {
   const pct = round(waterLevelPct(), 1);
   const volume = round((TANK_CAPACITY_L * pct) / 100, 0);
   const distance = round(TANK_HEIGHT_CM * (1 - pct / 100), 1);
   const high = pct >= 85;
   const low = pct <= 25;
-  const inlet = overrides.inlet_valve ?? pct < 40;
-  const pump = overrides.booster_pump ?? (!low && pct > 30);
   return {
     water_tank: {
       ultrasonic_depth_pct: pct,
@@ -79,8 +68,8 @@ function buildWaterTelemetry(overrides = {}) {
       low_level_dry_run: low,
     },
     actuator_states: {
-      inlet_valve: inlet,
-      booster_pump: pump,
+      inlet_valve: pct < 40 ? 'OPEN' : 'CLOSED',
+      booster_pump: low ? 'EMERGENCY_STOP' : 'ACTIVE',
     },
   };
 }
@@ -113,7 +102,7 @@ function buildPowerTelemetry(energyKwh) {
 
 function buildTelemetry(device, options = {}) {
   if (device.device_type === 'water_tank') {
-    return buildWaterTelemetry(options.actuators || {});
+    return buildWaterTelemetry();
   }
   if (device.device_type === 'climate') {
     return buildClimateTelemetry();
@@ -129,7 +118,7 @@ function buildPayload(device, options = {}) {
     location: device.location,
     timestamp: timestamp.toISOString(),
     metadata: {
-      firmware: device.firmware,
+      firmware: FIRMWARE,
       signal_rssi: Math.round(rand(-90, -40)),
     },
     telemetry: buildTelemetry(device, options),
@@ -217,12 +206,11 @@ function topicFor(device, kind) {
 
 module.exports = {
   ALERT,
-  COMMANDS,
+  FIRMWARE,
   METRICS,
   TANK_CAPACITY_L,
   TANK_HEIGHT_CM,
   devices,
-  findDevice,
   buildPayload,
   evaluateAlerts,
   validatePayload,

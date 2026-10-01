@@ -2,16 +2,14 @@ import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import clsx from 'clsx';
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { getDevices, sendCommand } from '../api/devices';
+import { getDevices } from '../api/devices';
 import { getSeries } from '../api/telemetry';
-import { ConfirmDialog } from '../components/ConfirmDialog';
 import { DataTable } from '../components/DataTable';
 import { JsonBlock } from '../components/JsonBlock';
 import { StatusBadge } from '../components/StatusBadge';
 import { EmptyState, ErrorState, Skeleton } from '../components/States';
-import { useToast } from '../components/toast-context';
 import { ageLabel, errorMessage, formatClock, formatNumber } from '../lib/format';
-import type { DeviceSummary, TankCommand } from '../types';
+import type { DeviceSummary } from '../types';
 
 const types = ['all', 'water_tank', 'climate', 'power_meter'] as const;
 
@@ -22,10 +20,8 @@ function metricFor(type: string) {
 }
 
 export function DevicesPage() {
-  const toast = useToast();
   const [type, setType] = useState<(typeof types)[number]>('all');
   const [selected, setSelected] = useState<DeviceSummary | null>(null);
-  const [pending, setPending] = useState<TankCommand | null>(null);
   const devices = useQuery({
     queryKey: ['devices'],
     queryFn: getDevices,
@@ -47,17 +43,6 @@ export function DevicesPage() {
     () => (devices.data?.devices ?? []).filter((device) => type === 'all' || device.type === type),
     [devices.data, type],
   );
-
-  async function confirmCommand() {
-    if (!selected || !pending) return;
-    try {
-      const result = await sendCommand(selected.id, pending);
-      toast.push(`${result.device_id}: ${pending.replaceAll('_', ' ')} published`);
-      setPending(null);
-    } catch (error) {
-      toast.push(errorMessage(error), 'danger');
-    }
-  }
 
   if (devices.isLoading) {
     return <div className="space-y-3" aria-busy="true">{Array.from({ length: 4 }, (_, index) => <Skeleton key={index} className="h-16" />)}</div>;
@@ -133,29 +118,12 @@ export function DevicesPage() {
                 </ResponsiveContainer>
               )}
             </div>
-            {selected.type === 'water_tank' && (
-              <div className="mt-4 grid grid-cols-2 gap-2">
-                {(['pump_on', 'pump_off', 'valve_open', 'valve_close'] as TankCommand[]).map((command) => (
-                  <button key={command} type="button" className="rounded-xl border border-surface-border px-2 py-2 text-xs" onClick={() => setPending(command)}>
-                    {command.replaceAll('_', ' ')}
-                  </button>
-                ))}
-              </div>
-            )}
             <div className="mt-4">
               <JsonBlock value={selected.latest} />
             </div>
           </aside>
         </div>
       )}
-      <ConfirmDialog
-        open={pending !== null}
-        title="Confirm actuator command"
-        body={`Publish ${pending ?? ''} for ${selected?.id ?? 'this device'}?`}
-        confirmLabel="Publish"
-        onConfirm={() => { void confirmCommand(); }}
-        onCancel={() => setPending(null)}
-      />
     </div>
   );
 }
