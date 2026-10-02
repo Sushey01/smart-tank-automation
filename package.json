@@ -12,7 +12,12 @@
     "seed": "node src/seed.js",
     "benchmark": "node src/benchmark.js",
     "smoke": "node src/smoke.js",
-    "test": "node src/test.js"
+    "test": "node src/test.js",
+    "demo:schema": "node scripts/demo-schema.js",
+    "evidence": "node scripts/generate-evidence.js",
+    "measure:failover": "node scripts/measure-failover.js",
+    "quorum:demo": "node scripts/quorum-demo.js",
+    "report:wordcount": "node scripts/count-report-words.js"
   },
   "dependencies": {
     "cors": "^2.8.5",

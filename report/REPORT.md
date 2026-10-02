@@ -349,12 +349,21 @@ cd web && npm install && npm run dev
 
 *The following screenshots document the live execution of the pipeline components:*
 
+> 📷 **[SCREENSHOT PLACEHOLDER: Figure 2 - Node.js Ingestion Server and MQTT Subscriber]**  
+> *Action:* Capture terminal running `npm run server` showing `[api] listening on http://localhost:3000` and incoming `[ingest] stored HOME_HUB_01...` readings.  
+> *Target file:* `report/images/02-server-terminal.png`  
 ![Figure 2: Node.js Ingestion Server and MQTT Subscriber](images/02-server-terminal.png)  
 *Figure 2: Node.js ingestion server establishing connection to MongoDB replica set rs0 and receiving live MQTT readings.*
 
+> 📷 **[SCREENSHOT PLACEHOLDER: Figure 3 - Mosquitto MQTT Broker Active Terminal]**  
+> *Action:* Capture terminal or docker logs of Mosquitto broker running on port 1883 with active connections (`docker logs mosquitto-broker` or `mosquitto`).  
+> *Target file:* `report/images/03-mosquitto-broker.png`  
 ![Figure 3: Mosquitto MQTT Broker Active Terminal](images/03-mosquitto-broker.png)  
 *Figure 3: Eclipse Mosquitto broker terminal running on port 1883 with active client connections.*
 
+> 📷 **[SCREENSHOT PLACEHOLDER: Figure 4 - Edge Simulator Publishing Telemetry]**  
+> *Action:* Capture terminal running `npm run simulator` displaying telemetry publishing at QoS 1 (`[sim] published HOME_HUB_01...`).  
+> *Target file:* `report/images/04-simulator-terminal.png`  
 ![Figure 4: Edge Simulator Publishing Telemetry](images/04-simulator-terminal.png)  
 *Figure 4: Edge simulator generating and transmitting synthetic water tank readings at QoS 1.*
 
@@ -443,15 +452,27 @@ To elevate the technical professionalism of the API and provide interactive veri
 ![Figure 5: Swagger UI API Documentation Overview](images/05-swagger-overview.png)  
 *Figure 5: Swagger UI documentation mounted at `/api-docs` listing all documented endpoints.*
 
+> 📷 **[SCREENSHOT PLACEHOLDER: Figure 6 - Swagger GET /api/health Response]**  
+> *Action:* Inside Swagger UI (`http://localhost:3000/api-docs`), expand `GET /api/health`, click **"Try it out"**, then **"Execute"**, and capture the JSON response showing `set: "rs0"` and healthy members.  
+> *Target file:* `report/images/06-swagger-health.png`  
 ![Figure 6: Swagger GET /api/health Response](images/06-swagger-health.png)  
 *Figure 6: Interactive Swagger execution of GET `/api/health` displaying replica set member states.*
 
+> 📷 **[SCREENSHOT PLACEHOLDER: Figure 7 - Swagger POST /api/telemetry CRUD Creation]**  
+> *Action:* Inside Swagger UI, expand `POST /api/telemetry`, click **"Try it out"**, enter `{ "ultrasonic_depth_pct": 55.0 }`, click **"Execute"**, and capture the HTTP 201 Created response.  
+> *Target file:* `report/images/07-swagger-post-crud.png`  
 ![Figure 7: Swagger POST /api/telemetry CRUD Creation](images/07-swagger-post-crud.png)  
 *Figure 7: Execution of POST `/api/telemetry` creating a new record with majority write concern.*
 
+> 📷 **[SCREENSHOT PLACEHOLDER: Figure 8 - React Web Dashboard with Tank Gauge and Trend Chart]**  
+> *Action:* In browser at `http://localhost:5173`, capture the main dashboard showing the animated water gauge, volume in litres, actuator badges, and time-series line chart.  
+> *Target file:* `report/images/08-web-dashboard.png`  
 ![Figure 8: React Web Dashboard with Tank Gauge and Trend Chart](images/08-web-dashboard.png)  
 *Figure 8: Real-time React dashboard displaying water tank depth gauge, volume, and telemetry trends.*
 
+> 📷 **[SCREENSHOT PLACEHOLDER: Figure 9 - Cluster Health Page Demonstrating Failover]**  
+> *Action:* On the web dashboard, navigate to `http://localhost:5173/cluster`. Stop the primary node (port 27017) and capture the amber **"Failover detected: Primary node switched"** banner and member cards.  
+> *Target file:* `report/images/09-cluster-failover.png`  
 ![Figure 9: Cluster Health Page Demonstrating Failover](images/09-cluster-failover.png)  
 *Figure 9: Cluster page on the web dashboard capturing replica set state change during a failover event.*
 
@@ -497,6 +518,9 @@ Running `npm test` outputs clear test assertions:
 ============================================================
 ```
 
+> 📷 **[SCREENSHOT PLACEHOLDER: Figure 10 - Automated Test Execution Output]**  
+> *Action:* In terminal, run `npm test` and capture the entire output showing all 12 tests passing with green indicators.  
+> *Target file:* `report/images/10-test-suite-pass.png`  
 ![Figure 10: Automated Test Execution Output](images/10-test-suite-pass.png)  
 *Figure 10: Terminal output showing all 12 test assertions passing across validation, rules, clustering, and CRUD operations.*
 
@@ -557,6 +581,9 @@ To evaluate fault tolerance, a deliberate primary node failure was simulated by 
 
 **Critical Theoretical Evaluation:** While the replica set provides automated failover with **zero acknowledged-write loss**, it does **not** provide uninterrupted writes during the election window. During the ~10-second election interval, write operations pause. The client application buffers or retries writes until the new primary is seated.
 
+> 📷 **[SCREENSHOT PLACEHOLDER: Figure 11 - MongoDB Replica Set Status Output]**  
+> *Action:* In terminal, run `mongosh --port 27017 --eval "rs.status()"` and capture output showing member states (`PRIMARY`, `SECONDARY`) and health: 1.  
+> *Target file:* `report/images/11-rs-status-terminal.png`  
 ![Figure 11: MongoDB Replica Set Status Output](images/11-rs-status-terminal.png)  
 *Figure 11: Terminal output of `rs.status()` displaying active nodes, state strings, and operational health.*
 
@@ -608,12 +635,21 @@ flowchart TD
 
 *The following screenshots from MongoDB Compass provide comprehensive evidence of database collections, stored documents, and optimized compound indexes:*
 
+> 📷 **[SCREENSHOT PLACEHOLDER: Figure 12 - MongoDB Compass Collection Overview]**  
+> *Action:* Open MongoDB Compass connected to `mongodb://localhost:27017`. Capture left sidebar showing `smart_water` database with all 4 collections: `alerts`, `devices`, `homes`, `sensor_activations`.  
+> *Target file:* `report/images/12-compass-collections.png`  
 ![Figure 12: MongoDB Compass Collection Overview](images/12-compass-collections.png)  
 *Figure 12: MongoDB Compass displaying smart_water database collections: homes, devices, sensor_activations, alerts.*
 
+> 📷 **[SCREENSHOT PLACEHOLDER: Figure 13 - MongoDB Compass Stored Sensor Activations]**  
+> *Action:* In MongoDB Compass, click on `sensor_activations` collection and expand one document to show nested `telemetry.water_tank`, float switches, and BSON dates.  
+> *Target file:* `report/images/13-compass-documents.png`  
 ![Figure 13: MongoDB Compass Stored Sensor Activations](images/13-compass-documents.png)  
 *Figure 13: Stored telemetry document in sensor_activations displaying nested BSON structures and BSON dates.*
 
+> 📷 **[SCREENSHOT PLACEHOLDER: Figure 14 - MongoDB Compass Compound and TTL Indexes]**  
+> *Action:* In MongoDB Compass under `sensor_activations`, click on the **Indexes** tab and capture the list showing `device_time`, `alert_time`, and `timestamp_ttl` (30 days).  
+> *Target file:* `report/images/14-compass-indexes.png`  
 ![Figure 14: MongoDB Compass Compound and TTL Indexes](images/14-compass-indexes.png)  
 *Figure 14: Configured B-Tree indexes on sensor_activations: device_time, alert_time, and the 30-day TTL index.*
 
