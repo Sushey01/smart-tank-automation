@@ -10,7 +10,16 @@ const express = require('express');
 const cors = require('cors');
 const mqtt = require('mqtt');
 const { MongoClient, ObjectId, ReadPreference } = require('mongodb');
-const { COLLECTION, DB_NAME, MONGO_URI, MQTT_URL, PORT } = require('./lib/config');
+const {
+  COLLECTION,
+  COLLECTIONS,
+  DB_NAME,
+  MONGO_URI,
+  MQTT_URL,
+  PORT,
+  API_KEY,
+  ENABLE_TELEMETRY_ADMIN,
+} = require('./lib/config');
 const {
   ALERT,
   HOME_HUB,
@@ -23,7 +32,7 @@ const {
   getControlState,
   setControlState,
 } = require('./lib/devices');
-const { ensureIndexes, ensureAllIndexes } = require('./lib/indexes');
+const { ensureAllIndexes } = require('./lib/indexes');
 const { deriveInsight } = require('./lib/insights');
 const { notifyAlertTransition } = require('./lib/telegram');
 const { setupSwagger } = require('./lib/swagger');
@@ -47,6 +56,33 @@ let collection;
 let homesCollection;
 let devicesCollection;
 let alertsCollection;
+let rejectedCollection;
+
+const ingestionStats = {
+  stored: 0,
+  duplicates: 0,
+  rejected: 0,
+  started_at: new Date().toISOString(),
+};
+
+const effectiveApiKey = API_KEY || 'dev-api-key';
+
+function requireApiKey(req, res, next) {
+  const key = req.header('X-API-Key');
+  if (!key || key !== effectiveApiKey) {
+    return res.status(401).json({ error: 'Unauthorized: missing or invalid X-API-Key header' });
+  }
+  next();
+}
+
+function requireTelemetryAdmin(req, res, next) {
+  if (!ENABLE_TELEMETRY_ADMIN) {
+    return res.status(403).json({
+      error: 'Direct telemetry mutations are disabled in production. Telemetry must be ingested via MQTT.',
+    });
+  }
+  next();
+}
 
 function lanBaseUrls(port) {
   const urls = [];
@@ -113,6 +149,26 @@ function serializeReading(doc) {
   };
 }
 
+function parseObjectId(value) {
+  const id = String(value || '');
+  if (!/^[a-fA-F0-9]{24}$/.test(id)) throw httpError(400, 'id is invalid');
+  return new ObjectId(id);
+}
+
+function findHomeFilter(id) {
+  if (/^[a-fA-F0-9]{24}$/.test(id)) {
+    return { $or: [{ _id: new ObjectId(id) }, { home_id: id }] };
+  }
+  return { home_id: id };
+}
+
+function findDeviceFilter(id) {
+  if (/^[a-fA-F0-9]{24}$/.test(id)) {
+    return { $or: [{ _id: new ObjectId(id) }, { device_id: id }] };
+  }
+  return { device_id: id };
+}
+
 async function route(res, fn) {
   try {
     await fn();
@@ -125,6 +181,7 @@ async function route(res, fn) {
   }
 }
 
+// Health and Cluster Status
 app.get('/api/health', (req, res) => route(res, async () => {
   const status = await client.db('admin').command({ replSetGetStatus: 1 });
   const members = (status.members || []).map((member) => ({
@@ -138,6 +195,7 @@ app.get('/api/health', (req, res) => route(res, async () => {
     set: status.set,
     primary: primary ? primary.name : null,
     members,
+    ingestion: ingestionStats,
     checkedAt: new Date().toISOString(),
   });
 }));
@@ -166,25 +224,119 @@ app.get('/api/replica-status', (req, res) => route(res, async () => {
   }
 }));
 
+// Ingestion Statistics
+app.get('/api/stats', (req, res) => route(res, async () => {
+  const startedTime = new Date(ingestionStats.started_at).getTime();
+  res.json({
+    stored: ingestionStats.stored,
+    duplicates: ingestionStats.duplicates,
+    rejected: ingestionStats.rejected,
+    started_at: ingestionStats.started_at,
+    uptime_seconds: Math.max(0, Math.floor((Date.now() - startedTime) / 1000)),
+  });
+}));
+
+// Homes Registry CRUD
 app.get('/api/homes', (req, res) => route(res, async () => {
   const homes = await homesCollection.find().toArray();
   res.json({ count: homes.length, homes });
 }));
 
+app.get('/api/homes/:id', (req, res) => route(res, async () => {
+  const home = await homesCollection.findOne(findHomeFilter(req.params.id));
+  if (!home) throw httpError(404, 'Home not found');
+  res.json({ home });
+}));
+
+app.post('/api/homes', requireApiKey, (req, res) => route(res, async () => {
+  const body = req.body || {};
+  if (!body.home_id) throw httpError(400, 'home_id is required');
+  try {
+    const doc = { ...body, created_at: body.created_at ? new Date(body.created_at) : new Date() };
+    const result = await homesCollection.insertOne(doc);
+    res.status(201).json({ home: { ...doc, _id: result.insertedId } });
+  } catch (err) {
+    if (err.code === 11000) throw httpError(409, `Home with home_id '${body.home_id}' already exists`);
+    throw err;
+  }
+}));
+
+app.patch('/api/homes/:id', requireApiKey, (req, res) => route(res, async () => {
+  const filter = findHomeFilter(req.params.id);
+  const { _id, ...updates } = req.body || {};
+  const updated = await homesCollection.findOneAndUpdate(
+    filter,
+    { $set: { ...updates, updated_at: new Date() } },
+    { returnDocument: 'after' },
+  );
+  const doc = updated && updated.value !== undefined ? updated.value : updated;
+  if (!doc) throw httpError(404, 'Home not found');
+  res.json({ home: doc });
+}));
+
+app.delete('/api/homes/:id', requireApiKey, (req, res) => route(res, async () => {
+  const filter = findHomeFilter(req.params.id);
+  const result = await homesCollection.deleteOne(filter);
+  if (result.deletedCount === 0) throw httpError(404, 'Home not found');
+  res.json({ deleted: true, id: req.params.id });
+}));
+
+// Devices Registry CRUD
 app.get('/api/devices', (req, res) => route(res, async () => {
   const devices = await devicesCollection.find().toArray();
   res.json({ count: devices.length, devices });
 }));
 
+app.get('/api/devices/:id', (req, res) => route(res, async () => {
+  const device = await devicesCollection.findOne(findDeviceFilter(req.params.id));
+  if (!device) throw httpError(404, 'Device not found');
+  res.json({ device });
+}));
+
+app.post('/api/devices', requireApiKey, (req, res) => route(res, async () => {
+  const body = req.body || {};
+  if (!body.device_id) throw httpError(400, 'device_id is required');
+  try {
+    const doc = { ...body, installed_at: body.installed_at ? new Date(body.installed_at) : new Date() };
+    const result = await devicesCollection.insertOne(doc);
+    res.status(201).json({ device: { ...doc, _id: result.insertedId } });
+  } catch (err) {
+    if (err.code === 11000) throw httpError(409, `Device with device_id '${body.device_id}' already exists`);
+    throw err;
+  }
+}));
+
+app.patch('/api/devices/:id', requireApiKey, (req, res) => route(res, async () => {
+  const filter = findDeviceFilter(req.params.id);
+  const { _id, ...updates } = req.body || {};
+  const updated = await devicesCollection.findOneAndUpdate(
+    filter,
+    { $set: { ...updates, updated_at: new Date() } },
+    { returnDocument: 'after' },
+  );
+  const doc = updated && updated.value !== undefined ? updated.value : updated;
+  if (!doc) throw httpError(404, 'Device not found');
+  res.json({ device: doc });
+}));
+
+app.delete('/api/devices/:id', requireApiKey, (req, res) => route(res, async () => {
+  const filter = findDeviceFilter(req.params.id);
+  const result = await devicesCollection.deleteOne(filter);
+  if (result.deletedCount === 0) throw httpError(404, 'Device not found');
+  res.json({ deleted: true, id: req.params.id });
+}));
+
+// Closed-loop Actuator Control State
 app.get('/api/telemetry/control', (req, res) => route(res, async () => {
   res.json(getControlState());
 }));
 
-app.post('/api/telemetry/control', (req, res) => route(res, async () => {
+app.post('/api/telemetry/control', requireApiKey, (req, res) => route(res, async () => {
   const updated = setControlState(req.body || {});
   res.json({ success: true, control: updated });
 }));
 
+// Telemetry Queries
 app.get('/api/telemetry/latest', (req, res) => route(res, async () => {
   const filter = { device_id: HOME_HUB.device_id };
   if (req.query.device_id !== undefined && String(req.query.device_id) !== HOME_HUB.device_id) {
@@ -329,12 +481,6 @@ app.get('/api/telemetry/summary', (req, res) => route(res, async () => {
   });
 }));
 
-function parseId(value) {
-  const id = String(value || '');
-  if (!/^[a-fA-F0-9]{24}$/.test(id)) throw httpError(400, 'id is invalid');
-  return new ObjectId(id);
-}
-
 async function insertReading(doc) {
   const previous = await collection
     .find({ device_id: HOME_HUB.device_id })
@@ -367,16 +513,24 @@ async function insertReading(doc) {
   return doc;
 }
 
-app.post('/api/telemetry', (req, res) => route(res, async () => {
+// Telemetry Mutations (Guarded by API Key and Admin Flag)
+app.post('/api/telemetry', requireApiKey, requireTelemetryAdmin, (req, res) => route(res, async () => {
   const body = req.body || {};
   const doc = readingFromLevel(body.ultrasonic_depth_pct, body.timestamp || new Date());
   doc.source = 'api';
-  await insertReading(doc);
-  res.status(201).json({ reading: serializeReading(doc) });
+  try {
+    await insertReading(doc);
+    res.status(201).json({ reading: serializeReading(doc) });
+  } catch (err) {
+    if (err.code === 11000) {
+      throw httpError(409, 'Duplicate reading: reading for this device and timestamp already exists');
+    }
+    throw err;
+  }
 }));
 
-app.patch('/api/telemetry/:id([a-fA-F0-9]{24})', (req, res) => route(res, async () => {
-  const _id = parseId(req.params.id);
+app.patch('/api/telemetry/:id([a-fA-F0-9]{24})', requireApiKey, requireTelemetryAdmin, (req, res) => route(res, async () => {
+  const _id = parseObjectId(req.params.id);
   const existing = await collection.findOne({ _id, device_id: HOME_HUB.device_id });
   if (!existing) throw httpError(404, 'reading not found');
   const updated = replaceLevel(existing, (req.body || {}).ultrasonic_depth_pct);
@@ -389,8 +543,8 @@ app.patch('/api/telemetry/:id([a-fA-F0-9]{24})', (req, res) => route(res, async 
   res.json({ reading: serializeReading(updated) });
 }));
 
-app.delete('/api/telemetry/:id([a-fA-F0-9]{24})', (req, res) => route(res, async () => {
-  const _id = parseId(req.params.id);
+app.delete('/api/telemetry/:id([a-fA-F0-9]{24})', requireApiKey, requireTelemetryAdmin, (req, res) => route(res, async () => {
+  const _id = parseObjectId(req.params.id);
   const result = await collection.deleteOne(
     { _id, device_id: HOME_HUB.device_id },
     { writeConcern: { w: 'majority' } },
@@ -402,38 +556,68 @@ app.delete('/api/telemetry/:id([a-fA-F0-9]{24})', (req, res) => route(res, async
 function startMqtt() {
   const mqttClient = mqtt.connect(MQTT_URL, {
     reconnectPeriod: 2000,
-    clientId: `smart-tank-ingest-${process.pid}`,
+    clientId: 'smart-tank-ingestion-service',
+    clean: false,
   });
+
   mqttClient.on('connect', () => {
     mqttClient.subscribe(TELEMETRY_TOPIC, { qos: 1 }, (err) => {
       if (err) console.error('[ingest] subscribe failed', err.message);
       else console.log(`[ingest] subscribed ${TELEMETRY_TOPIC} via ${MQTT_URL}`);
     });
   });
+
   mqttClient.on('error', (err) => {
     console.error('[ingest] mqtt error', err.message);
   });
+
   mqttClient.on('message', async (topic, body) => {
     let payload;
     try {
       payload = JSON.parse(body.toString());
     } catch {
+      ingestionStats.rejected += 1;
       console.error(`[ingest] rejected non-JSON on ${topic}`);
+      if (rejectedCollection) {
+        await rejectedCollection.insertOne({
+          topic,
+          payload: body.toString(),
+          reason: 'invalid_json',
+          received_at: new Date(),
+        }).catch(() => {});
+      }
       return;
     }
+
     const problem = validatePayload(payload);
     if (problem) {
+      ingestionStats.rejected += 1;
       console.error(`[ingest] rejected ${topic}: ${problem}`);
+      if (rejectedCollection) {
+        await rejectedCollection.insertOne({
+          topic,
+          payload,
+          reason: problem,
+          received_at: new Date(),
+        }).catch(() => {});
+      }
       return;
     }
+
     try {
       const doc = toStoredReading(payload);
       doc.source = 'mqtt';
       await insertReading(doc);
+      ingestionStats.stored += 1;
       const flag = doc.alert ? ` alert=${doc.alert_reasons.join(',')}` : '';
       console.log(`[ingest] stored ${doc.device_id} ${doc.timestamp.toISOString()}${flag}`);
     } catch (err) {
-      console.error('[ingest] insert failed', err.message);
+      if (err.code === 11000) {
+        ingestionStats.duplicates += 1;
+        console.log(`[ingest] duplicate skipped: ${payload.device_id} ${payload.timestamp}`);
+      } else {
+        console.error('[ingest] insert failed', err.message);
+      }
     }
   });
 }
@@ -442,11 +626,14 @@ async function main() {
   await client.connect();
   const db = client.db(DB_NAME);
   collection = db.collection(COLLECTION);
-  homesCollection = db.collection('homes');
-  devicesCollection = db.collection('devices');
-  alertsCollection = db.collection('alerts');
+  homesCollection = db.collection(COLLECTIONS.HOMES || 'homes');
+  devicesCollection = db.collection(COLLECTIONS.DEVICES || 'devices');
+  alertsCollection = db.collection(COLLECTIONS.ALERTS || 'alerts');
+  rejectedCollection = db.collection(COLLECTIONS.REJECTED_MESSAGES || 'rejected_messages');
+
   await ensureAllIndexes(db);
-  console.log(`[api] indexes ensured on ${DB_NAME} collections (readings, devices, homes, alerts)`);
+  console.log(`[api] indexes ensured on ${DB_NAME} collections (readings, devices, homes, alerts, rejected_messages)`);
+
   app.listen(PORT, () => {
     console.log(`[api] listening on http://localhost:${PORT}`);
     const lan = lanBaseUrls(PORT);
