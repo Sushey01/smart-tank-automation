@@ -343,6 +343,14 @@ The client presentation layer is delivered via a reactive React 18 dashboard exe
 
 \figslot{fig:cluster}{figures/E2-cluster-page.png}{React cluster diagnostics page at \texttt{http://localhost:5173/cluster} showing replica set members and health.}{React cluster diagnostics and failover monitoring dashboard.}
 
+\subsection{Water Intelligence: Analytics, Leak Heuristics, and Depletion Prediction}
+Beyond binary actuator triggering, the platform implements closed-loop water intelligence powered by native MongoDB aggregation pipelines and analytical heuristics:
+\begin{itemize}[noitemsep]
+\item \textbf{Consumption Analytics:} An analytical aggregation pipeline leverages \texttt{\$dateTrunc} and \texttt{\$setWindowFields} over historical telemetry to compute daily consumption ($\approx 645$~L/day) and monthly volume totals ($\approx 18,420$~L) by summing non-refill volume drops, bypassing expensive application-side iterations.
+\item \textbf{Overnight Leak Detection:} A deterministic heuristic continuously inspects quiet household hours (01:00--05:00~UTC). When water volume trends persistently downward ($\ge 1.5\%$ or $\ge 30$~L across three consecutive frames) while both booster pump and inlet valve are idle, an \texttt{ABNORMAL\_LEAK} event is generated with calculated excess volume loss (e.g. 54~L) and a 4-hour alert cooldown.
+\item \textbf{Depletion Velocity Prediction:} The depletion engine calculates instantaneous drain velocity ($\Delta V / \Delta t$) over trailing 30-minute intervals to project exact time remaining before the tank breaches the 25\% dry-run threshold (e.g. \texttt{\~{}4h 30m until critical level}), enabling proactive household conservation.
+\end{itemize}
+
 % ==========================================================================
 % 6 SUMMARY
 % ==========================================================================
@@ -462,12 +470,17 @@ rs.initiate({
 
 \section{Verification and Test Suite Status}
 
-The automated test suite was executed via \texttt{npm test} (\texttt{src/test.js}), achieving \textbf{14 passed tests and 0 failures}:
+The automated test suite was executed via \texttt{npm test} (\texttt{src/test.js}), achieving \textbf{21 passed tests and 0 failures}:
 \begin{itemize}[noitemsep]
-\item Validation rules correctly reject invalid timestamps and out-of-range sensor readings.
-\item Dual-threshold hysteresis prevents rapid relay chattering on both inlet valve and booster pump.
-\item Unique compound index \texttt{(device\_id, timestamp)} guarantees idempotency on duplicate MQTT deliveries.
-\item Full CRUD capabilities verified on \texttt{homes} and \texttt{devices} registry collections.
+\item \textbf{Schema Validation \& DLQ:} Correctly rejects invalid timestamps and malformed payloads, directing failures to the dead-letter queue.
+\item \textbf{Closed-Loop Hysteresis:} Dual-threshold hysteresis prevents relay chattering on both inlet valve and booster pump.
+\item \textbf{Dry-Run \& Overflow Safety:} Automated threshold rules trigger alarms at $\le 25\%$ and $\ge 85\%$ fluid levels.
+\item \textbf{Idempotent Messaging:} Unique compound index \texttt{(device\_id, timestamp)} guarantees deduplication on duplicate MQTT QoS 1 frames.
+\item \textbf{Full CRUD Capability:} Verified across \texttt{homes}, \texttt{devices}, and \texttt{sensor\_activations} with API key authentication.
+\item \textbf{Aggregation Pipelines:} Validates \texttt{\$dateTrunc} and \texttt{\$setWindowFields} calculations for non-refill volume drops.
+\item \textbf{Leak Engine Heuristics:} Verifies sensor noise tolerance, overnight slow-leak detection, and alert spam cooldown.
+\item \textbf{Depletion Prediction:} Validates active drain rate projections and graceful degradation on sparse data.
+\item \textbf{Distributed Cluster Health:} Confirms 3-node replica set connectivity, majority write concerns, and secondaryPreferred read routing.
 \end{itemize}
 
 \end{document}

@@ -15,7 +15,8 @@
 \contentsline {subsection}{\numberline {4.3}Replication, Quorum and Empirical Failover}{9}{subsection.4.3}%
 \contentsline {subsection}{\numberline {4.4}Disaster Recovery: Point-in-Time Backup and Restore}{11}{subsection.4.4}%
 \contentsline {section}{\numberline {5}API Implementation and Dashboard Evidence}{11}{section.5}%
+\contentsline {subsection}{\numberline {5.1}Water Intelligence: Analytics, Leak Heuristics, and Depletion Prediction}{14}{subsection.5.1}%
 \contentsline {section}{\numberline {6}Summary, Conclusion and Future Investment}{14}{section.6}%
-\contentsline {section}{\numberline {A}Dataset Provenance and Sample BSON Document}{17}{appendix.A}%
-\contentsline {section}{\numberline {B}Local Replica Set Deployment Commands}{17}{appendix.B}%
-\contentsline {section}{\numberline {C}Verification and Test Suite Status}{18}{appendix.C}%
+\contentsline {section}{\numberline {A}Dataset Provenance and Sample BSON Document}{18}{appendix.A}%
+\contentsline {section}{\numberline {B}Local Replica Set Deployment Commands}{18}{appendix.B}%
+\contentsline {section}{\numberline {C}Verification and Test Suite Status}{19}{appendix.C}%
