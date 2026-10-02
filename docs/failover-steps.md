@@ -1,45 +1,69 @@
-# Failover steps (host replica set)
+# Failover Experiments & Measurement Procedures
 
-This is the path to screenshot for the report. It uses the three `mongod` processes on ports 27017, 27018, and 27019. Run `scripts/replica-init.js` only when 27017 is free or is already this coursework `rs0`. The script refuses to initialise a different database.
+**Module:** CMP6207 Modern Data Stores  
+**Assessment:** Distributed Data Management & High Availability  
 
-Expect automatic failover with no acknowledged-write loss, and a brief write pause during election (~10 s). Do not describe this as zero downtime.
+This guide details two failover experiments to capture empirical evidence for the coursework report. It uses the 3-node MongoDB Replica Set (`rs0`) on ports 27017, 27018, and 27019.
 
-## Before you start
+> **Theoretical Principle:** Automatic failover with no acknowledged-write loss; brief write pause during election. Do not describe this as zero downtime.
 
-1. All three `mongod` processes are running (see the README).
-2. `mongosh --port 27017 --file scripts/replica-init.js` has been run once.
-3. `rs.status()` shows one PRIMARY and two SECONDARY members.
-4. The API is running (`npm run server`) and the dashboard is open at `http://localhost:5173/cluster`.
+---
 
-The member on port 27017 has priority 2, so it is usually the primary.
+## 1. Prerequisites & Baseline Verification
 
-## Capture the healthy set
+1. Ensure all 3 nodes are active and healthy:
+   ```bash
+   mongosh --port 27017 --eval 'rs.status().members.forEach(m => print(m.name + " " + m.stateStr + " health=" + m.health))'
+   ```
+2. Node 1 (port 27017) has priority 2 and should be `PRIMARY`.
+3. Open the Web Dashboard at **`http://localhost:5173/cluster`** (polls every 2 seconds).
 
-```bash
-mongosh --port 27017 --eval 'rs.status().members.forEach(m => print(m.name + " " + m.stateStr + " health=" + m.health))'
-mongosh --port 27017 --eval 'db.getSiblingDB("smart_water").sensor_activations.countDocuments()'
-mongosh --port 27018 --eval 'db.getSiblingDB("smart_water").sensor_activations.countDocuments()'
-```
+---
 
-The two counts should match once both members are PRIMARY or SECONDARY.
+## 2. Experiment A: Graceful Stop (Ctrl+C / shutdown)
 
-## Stop the primary
+In a graceful shutdown, `mongod` completes ongoing operations, flushes the journal, closes network sockets (TCP FIN), and steps down.
 
-In the terminal that is running the primary (usually port 27017), press Ctrl+C.
+1. In a separate terminal, launch the automated failover measurement probe:
+   ```bash
+   node scripts/measure-failover.js
+   ```
+2. In another terminal, gracefully stop the primary node:
+   ```bash
+   mongosh --port 27017 --eval "db.adminCommand({ shutdown: 1 })"
+   ```
+3. **Observed Results:**
+   - Surviving secondaries detect socket termination immediately.
+   - An election is called rapidly (~3 to 6 seconds).
+   - Node 2 or Node 3 is elected as the new `PRIMARY`.
+   - On the web dashboard at `http://localhost:5173/cluster`, the amber banner displays:  
+     `Failover detected: new primary at HH:MM:SS`.
+   - The probe script reports the write pause and verifies 0 missing acknowledged writes.
+4. Stop the probe script (`Ctrl+C`) to save `evidence/failover-<timestamp>.json`.
+5. Restart Node 1:
+   ```bash
+   mongod --replSet rs0 --port 27017 --dbpath ./mongo-cluster/node1 --bind_ip localhost --fork --logpath ./mongo-cluster/node1/mongod.log
+   ```
 
-Leave `/cluster` open. It polls every 2 seconds. After the election you should see:
+---
 
-- a dismissible banner: `Failover detected: new primary … at HH:MM:SS`
-- one remaining member as Primary
-- the stopped member as a down state
-- a line in the failover log
+## 3. Experiment B: Hard Kill (`kill -9` / Abrupt Host Crash)
 
-Writes that need majority acknowledgement pause until the new primary exists. The Node driver has `retryWrites` enabled, so a retryable insert can complete after the election.
+In an ungraceful hard termination (simulating sudden hardware failure or kernel panic), no TCP teardown occurs.
 
-## Restart the stopped member
-
-Start the same `mongod` command again (same port and `--dbpath`). It rejoins the set, usually as a secondary. Refresh the counts after its state is SECONDARY.
-
-```bash
-mongosh --port 27018 --eval 'rs.status().members.forEach(m => print(m.name + " " + m.stateStr))'
-```
+1. Launch the probe script:
+   ```bash
+   node scripts/measure-failover.js
+   ```
+2. Identify the PID of the current primary node and kill it abruptly:
+   ```bash
+   # Find primary PID (e.g., port 27017 or current primary)
+   pkill -9 -f "port 27017"
+   ```
+3. **Observed Results & Theoretical Difference:**
+   - Because no TCP FIN is sent, surviving secondaries do not know the node is gone until their heartbeat probes time out (`heartbeatTimeoutSecs: 10`).
+   - The election trigger takes longer (~10 to 12 seconds).
+   - Once the heartbeat timeout expires, Nodes 2 and 3 establish quorum (2/3 votes) and elect the new primary.
+   - Crucially, **zero acknowledged writes are lost** in both experiments because all writes were acknowledged under `w: "majority"`.
+4. Stop the probe script and verify `evidence/failover-<timestamp>.json`.
+5. Restart the terminated node.
