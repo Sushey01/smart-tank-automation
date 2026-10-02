@@ -11,10 +11,15 @@ function databaseName(uri) {
   return match ? match[1] : 'smart_water';
 }
 
+const API_KEY = process.env.API_KEY || '';
+const ENABLE_TELEMETRY_ADMIN = process.env.ENABLE_TELEMETRY_ADMIN === 'true';
+
 module.exports = {
   MONGO_URI,
   MQTT_URL,
   PORT,
+  API_KEY,
+  ENABLE_TELEMETRY_ADMIN,
   DB_NAME: databaseName(MONGO_URI),
   COLLECTION: 'sensor_activations',
   COLLECTIONS: {
@@ -22,5 +27,7 @@ module.exports = {
     HOMES: 'homes',
     DEVICES: 'devices',
     ALERTS: 'alerts',
+    REJECTED_MESSAGES: 'rejected_messages',
+    FAILOVER_PROBE: 'failover_probe',
   },
 };
