@@ -11,6 +11,7 @@ const TELEMETRY_TOPIC = 'iothings/home/telemetry';
 const ALERT = {
   OVERFLOW: 'TANK_OVERFLOW',
   DRY_RUN: 'TANK_DRY_RUN',
+  LEAK_DETECTED: 'LEAK_DETECTED',
 };
 
 const HOME_HUB = {
@@ -18,6 +19,34 @@ const HOME_HUB = {
   device_type: 'water_tank',
   location: 'home',
 };
+
+let controlState = {
+  mode: 'AUTO', // 'AUTO' or 'MANUAL'
+  pump_command: 'ACTIVE',
+  valve_command: 'OPEN',
+  last_command_at: new Date().toISOString(),
+};
+
+function getControlState() {
+  return { ...controlState };
+}
+
+function setControlState(updates = {}) {
+  if (updates.mode && ['AUTO', 'MANUAL'].includes(String(updates.mode).toUpperCase())) {
+    controlState.mode = String(updates.mode).toUpperCase();
+  }
+  if (updates.pump) {
+    const p = String(updates.pump).toUpperCase();
+    if (['ACTIVE', 'ON', 'START'].includes(p)) controlState.pump_command = 'ACTIVE';
+    else if (['EMERGENCY_STOP', 'STOP', 'OFF'].includes(p)) controlState.pump_command = 'EMERGENCY_STOP';
+  }
+  if (updates.valve) {
+    const v = String(updates.valve).toUpperCase();
+    if (['OPEN', 'CLOSED'].includes(v)) controlState.valve_command = v;
+  }
+  controlState.last_command_at = new Date().toISOString();
+  return { ...controlState };
+}
 
 function rand(min, max) {
   return min + Math.random() * (max - min);
@@ -41,6 +70,16 @@ function buildWaterTelemetry(level) {
   const distance = round(TANK_HEIGHT_CM * (1 - pct / 100), 1);
   const high = pct >= 85;
   const low = pct <= 25;
+
+  let valveState = high ? 'CLOSED' : 'OPEN';
+  let pumpState = low ? 'EMERGENCY_STOP' : 'ACTIVE';
+
+  if (controlState.mode === 'MANUAL') {
+    // Manual override with hardware safety limits
+    valveState = high ? 'CLOSED' : controlState.valve_command;
+    pumpState = low ? 'EMERGENCY_STOP' : controlState.pump_command;
+  }
+
   return {
     water_tank: {
       ultrasonic_depth_pct: pct,
@@ -52,9 +91,10 @@ function buildWaterTelemetry(level) {
       low_level_dry_run: low,
     },
     actuator_states: {
-      inlet_valve: high ? 'CLOSED' : 'OPEN',
-      booster_pump: low ? 'EMERGENCY_STOP' : 'ACTIVE',
+      inlet_valve: valveState,
+      booster_pump: pumpState,
     },
+    control_mode: controlState.mode,
   };
 }
 
@@ -77,7 +117,7 @@ function tankOf(doc) {
   return doc && doc.telemetry && doc.telemetry.water_tank;
 }
 
-function evaluateAlerts(doc) {
+function evaluateAlerts(doc, previousDoc = null) {
   const reasons = [];
   const tank = tankOf(doc);
   const depth = tank && tank.ultrasonic_depth_pct;
@@ -88,6 +128,23 @@ function evaluateAlerts(doc) {
   if ((typeof depth === 'number' && depth <= 25) || floats.low_level_dry_run === true) {
     reasons.push(ALERT.DRY_RUN);
   }
+
+  // Algorithmic rate-of-drop leak detection
+  if (previousDoc && tankOf(previousDoc)) {
+    const prevDepth = tankOf(previousDoc).ultrasonic_depth_pct;
+    const prevTime = new Date(previousDoc.timestamp).getTime();
+    const currTime = new Date(doc.timestamp).getTime();
+    const elapsedSec = (currTime - prevTime) / 1000;
+    const actuatorStates = (doc && doc.telemetry && doc.telemetry.actuator_states) || {};
+
+    if (elapsedSec > 0 && elapsedSec <= 30 && actuatorStates.booster_pump !== 'ACTIVE') {
+      const dropPct = prevDepth - depth;
+      if (dropPct >= 2.5) {
+        reasons.push(ALERT.LEAK_DETECTED);
+      }
+    }
+  }
+
   return { alert_reasons: reasons, alert: reasons.length > 0 };
 }
 
@@ -117,7 +174,38 @@ function validatePayload(payload) {
   return null;
 }
 
-function toStoredReading(payload, ingestedAt = new Date()) {
+function readingFromLevel(levelPct, timestamp = new Date()) {
+  const level = Number(levelPct);
+  if (!Number.isFinite(level) || level < 0 || level > 100) {
+    const err = new Error('ultrasonic_depth_pct must be a number from 0 to 100');
+    err.status = 400;
+    throw err;
+  }
+  const when = timestamp instanceof Date ? timestamp : new Date(timestamp);
+  if (Number.isNaN(when.getTime())) {
+    const err = new Error('timestamp is invalid');
+    err.status = 400;
+    throw err;
+  }
+  return toStoredReading(buildPayload({ levelPct: level, timestamp: when }), new Date());
+}
+
+function replaceLevel(doc, levelPct) {
+  const level = Number(levelPct);
+  if (!Number.isFinite(level) || level < 0 || level > 100) {
+    const err = new Error('ultrasonic_depth_pct must be a number from 0 to 100');
+    err.status = 400;
+    throw err;
+  }
+  const next = {
+    ...doc,
+    telemetry: buildWaterTelemetry(level),
+    metadata: { ...doc.metadata, firmware: FIRMWARE },
+  };
+  return { ...next, ...evaluateAlerts(next) };
+}
+
+function toStoredReading(payload, ingestedAt = new Date(), previousDoc = null) {
   const error = validatePayload(payload);
   if (error) {
     const err = new Error(error);
@@ -136,7 +224,7 @@ function toStoredReading(payload, ingestedAt = new Date()) {
     },
     telemetry: payload.telemetry,
   };
-  return { ...doc, ...evaluateAlerts(doc), ingested_at: ingestedAt };
+  return { ...doc, ...evaluateAlerts(doc, previousDoc), ingested_at: ingestedAt };
 }
 
 module.exports = {
@@ -148,6 +236,10 @@ module.exports = {
   TANK_HEIGHT_CM,
   buildPayload,
   evaluateAlerts,
+  readingFromLevel,
+  replaceLevel,
   validatePayload,
   toStoredReading,
+  getControlState,
+  setControlState,
 };

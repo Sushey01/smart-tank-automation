@@ -54,7 +54,13 @@ try {
     print(String(err));
     quit(1);
   }
-  const users = userDatabaseNames();
+  let users = [];
+  try {
+    users = userDatabaseNames();
+  } catch (e) {
+    // In MongoDB 8, listDatabases throws if node is not yet initiated
+    users = [];
+  }
   if (users.length > 0) {
     print(`Refusing rs.initiate: port 27017 already has data in ${users.join(', ')}.`);
     print('This looks like a different mongod. Do not initialise it as rs0.');

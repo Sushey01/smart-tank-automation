@@ -24,6 +24,9 @@ Base URL is empty in development so Vite proxies `/api` to `http://localhost:300
 - `GET /api/telemetry/history?from&to&page&limit` → `{ page, limit, total, items }`
 - `GET /api/telemetry/history?bucket=minute|hour&from&to` → `{ device_id, bucket, points: [{ bucket, avg, min, max, count }] }`
 - `GET /api/telemetry/summary` → `{ reading, status, trend, rate_litres_per_hour, estimate, last_hour, last_seen, signal_rssi }`
+- `POST /api/telemetry` body `{ ultrasonic_depth_pct }` → `201 { reading }`
+- `PATCH /api/telemetry/:id` body `{ ultrasonic_depth_pct }` → `{ reading }` with floats and actuators recomputed
+- `DELETE /api/telemetry/:id` → `{ deleted: true, id }` or 404
 - `status` is `online` if `last_seen` is under 30 s, otherwise `offline`
 - `trend` is `rising`, `falling`, or `steady`
 - `estimate.kind` is `empty`, `full`, or `not_estimated`

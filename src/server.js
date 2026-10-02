@@ -5,15 +5,28 @@
  * brief write pause during election (~10 s).
  */
 
+const os = require('os');
 const express = require('express');
 const cors = require('cors');
 const mqtt = require('mqtt');
-const { MongoClient, ReadPreference } = require('mongodb');
+const { MongoClient, ObjectId, ReadPreference } = require('mongodb');
 const { COLLECTION, DB_NAME, MONGO_URI, MQTT_URL, PORT } = require('./lib/config');
-const { ALERT, HOME_HUB, TELEMETRY_TOPIC, toStoredReading, validatePayload } = require('./lib/devices');
-const { ensureIndexes } = require('./lib/indexes');
+const {
+  ALERT,
+  HOME_HUB,
+  TELEMETRY_TOPIC,
+  readingFromLevel,
+  replaceLevel,
+  toStoredReading,
+  validatePayload,
+  evaluateAlerts,
+  getControlState,
+  setControlState,
+} = require('./lib/devices');
+const { ensureIndexes, ensureAllIndexes } = require('./lib/indexes');
 const { deriveInsight } = require('./lib/insights');
 const { notifyAlertTransition } = require('./lib/telegram');
+const { setupSwagger } = require('./lib/swagger');
 
 const client = new MongoClient(MONGO_URI, {
   retryWrites: true,
@@ -26,10 +39,25 @@ const secondary = { readPreference: new ReadPreference('secondaryPreferred') };
 const LEVEL_FIELD = '$telemetry.water_tank.ultrasonic_depth_pct';
 
 const app = express();
-app.use(cors({ origin: 'http://localhost:5173' }));
+app.use(cors({ origin: ['http://localhost:5173', 'http://localhost:3000'] }));
 app.use(express.json({ limit: '32kb' }));
+setupSwagger(app);
 
 let collection;
+let homesCollection;
+let devicesCollection;
+let alertsCollection;
+
+function lanBaseUrls(port) {
+  const urls = [];
+  for (const entries of Object.values(os.networkInterfaces())) {
+    for (const entry of entries ?? []) {
+      const ipv4 = entry.family === 'IPv4' || entry.family === 4;
+      if (ipv4 && !entry.internal) urls.push(`http://${entry.address}:${port}`);
+    }
+  }
+  return urls;
+}
 
 function httpError(status, message) {
   const err = new Error(message);
@@ -112,6 +140,49 @@ app.get('/api/health', (req, res) => route(res, async () => {
     members,
     checkedAt: new Date().toISOString(),
   });
+}));
+
+app.get('/api/replica-status', (req, res) => route(res, async () => {
+  try {
+    const status = await client.db('admin').command({ replSetGetStatus: 1 });
+    const members = (status.members || []).map((m) => ({
+      name: m.name,
+      statestr: m.stateStr,
+      health: m.health,
+      uptime: m.uptime,
+    }));
+    res.json({
+      configured: true,
+      set: status.set,
+      myState: status.myState,
+      members,
+    });
+  } catch (err) {
+    res.json({
+      configured: false,
+      message: 'Replica set is not configured or mongod is standalone',
+      error: err.message,
+    });
+  }
+}));
+
+app.get('/api/homes', (req, res) => route(res, async () => {
+  const homes = await homesCollection.find().toArray();
+  res.json({ count: homes.length, homes });
+}));
+
+app.get('/api/devices', (req, res) => route(res, async () => {
+  const devices = await devicesCollection.find().toArray();
+  res.json({ count: devices.length, devices });
+}));
+
+app.get('/api/telemetry/control', (req, res) => route(res, async () => {
+  res.json(getControlState());
+}));
+
+app.post('/api/telemetry/control', (req, res) => route(res, async () => {
+  const updated = setControlState(req.body || {});
+  res.json({ success: true, control: updated });
 }));
 
 app.get('/api/telemetry/latest', (req, res) => route(res, async () => {
@@ -258,6 +329,76 @@ app.get('/api/telemetry/summary', (req, res) => route(res, async () => {
   });
 }));
 
+function parseId(value) {
+  const id = String(value || '');
+  if (!/^[a-fA-F0-9]{24}$/.test(id)) throw httpError(400, 'id is invalid');
+  return new ObjectId(id);
+}
+
+async function insertReading(doc) {
+  const previous = await collection
+    .find({ device_id: HOME_HUB.device_id })
+    .sort({ timestamp: -1 })
+    .limit(1)
+    .next();
+  if (previous && (!doc.alert_reasons || doc.alert_reasons.length === 0)) {
+    const leakCheck = evaluateAlerts(doc, previous);
+    if (leakCheck.alert) {
+      doc.alert = true;
+      doc.alert_reasons = leakCheck.alert_reasons;
+    }
+  }
+  await collection.insertOne(doc, { writeConcern: { w: 'majority' } });
+  if (doc.alert && alertsCollection) {
+    alertsCollection.insertOne({
+      device_id: doc.device_id,
+      severity: doc.alert_reasons.some((r) => r.includes('OVERFLOW') || r.includes('LEAK')) ? 'critical' : 'warning',
+      reasons: doc.alert_reasons,
+      message: `Operational alert: ${doc.alert_reasons.join(', ')}`,
+      timestamp: doc.timestamp,
+      acknowledged: false,
+    }).catch(() => {});
+  }
+  try {
+    await notifyAlertTransition(previous, doc);
+  } catch (err) {
+    console.error('[telegram] send failed', err.message);
+  }
+  return doc;
+}
+
+app.post('/api/telemetry', (req, res) => route(res, async () => {
+  const body = req.body || {};
+  const doc = readingFromLevel(body.ultrasonic_depth_pct, body.timestamp || new Date());
+  doc.source = 'api';
+  await insertReading(doc);
+  res.status(201).json({ reading: serializeReading(doc) });
+}));
+
+app.patch('/api/telemetry/:id([a-fA-F0-9]{24})', (req, res) => route(res, async () => {
+  const _id = parseId(req.params.id);
+  const existing = await collection.findOne({ _id, device_id: HOME_HUB.device_id });
+  if (!existing) throw httpError(404, 'reading not found');
+  const updated = replaceLevel(existing, (req.body || {}).ultrasonic_depth_pct);
+  await collection.replaceOne({ _id }, updated, { writeConcern: { w: 'majority' } });
+  try {
+    await notifyAlertTransition(existing, updated);
+  } catch (err) {
+    console.error('[telegram] send failed', err.message);
+  }
+  res.json({ reading: serializeReading(updated) });
+}));
+
+app.delete('/api/telemetry/:id([a-fA-F0-9]{24})', (req, res) => route(res, async () => {
+  const _id = parseId(req.params.id);
+  const result = await collection.deleteOne(
+    { _id, device_id: HOME_HUB.device_id },
+    { writeConcern: { w: 'majority' } },
+  );
+  if (result.deletedCount === 0) throw httpError(404, 'reading not found');
+  res.json({ deleted: true, id: String(_id) });
+}));
+
 function startMqtt() {
   const mqttClient = mqtt.connect(MQTT_URL, {
     reconnectPeriod: 2000,
@@ -287,19 +428,10 @@ function startMqtt() {
     }
     try {
       const doc = toStoredReading(payload);
-      const previous = await collection
-        .find({ device_id: HOME_HUB.device_id })
-        .sort({ timestamp: -1 })
-        .limit(1)
-        .next();
-      await collection.insertOne(doc, { writeConcern: { w: 'majority' } });
+      doc.source = 'mqtt';
+      await insertReading(doc);
       const flag = doc.alert ? ` alert=${doc.alert_reasons.join(',')}` : '';
       console.log(`[ingest] stored ${doc.device_id} ${doc.timestamp.toISOString()}${flag}`);
-      try {
-        await notifyAlertTransition(previous, doc);
-      } catch (err) {
-        console.error('[telegram] send failed', err.message);
-      }
     } catch (err) {
       console.error('[ingest] insert failed', err.message);
     }
@@ -308,11 +440,21 @@ function startMqtt() {
 
 async function main() {
   await client.connect();
-  collection = client.db(DB_NAME).collection(COLLECTION);
-  await ensureIndexes(collection);
-  console.log(`[api] indexes ensured on ${DB_NAME}.${COLLECTION}`);
+  const db = client.db(DB_NAME);
+  collection = db.collection(COLLECTION);
+  homesCollection = db.collection('homes');
+  devicesCollection = db.collection('devices');
+  alertsCollection = db.collection('alerts');
+  await ensureAllIndexes(db);
+  console.log(`[api] indexes ensured on ${DB_NAME} collections (readings, devices, homes, alerts)`);
   app.listen(PORT, () => {
     console.log(`[api] listening on http://localhost:${PORT}`);
+    const lan = lanBaseUrls(PORT);
+    if (lan.length === 0) {
+      console.log('[api] no LAN address found for the phone app');
+    } else {
+      console.log(`[api] phone base URL: ${lan.join(' ')}`);
+    }
   });
   startMqtt();
 }

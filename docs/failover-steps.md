@@ -43,15 +43,3 @@ Start the same `mongod` command again (same port and `--dbpath`). It rejoins the
 ```bash
 mongosh --port 27018 --eval 'rs.status().members.forEach(m => print(m.name + " " + m.stateStr))'
 ```
-
-## Optional Docker demo
-
-Only if you are not already using ports 27017–27019 or a host Mosquitto on 1883:
-
-```bash
-docker compose up -d
-bash scripts/init-replica.sh
-bash scripts/failover-demo.sh
-```
-
-Point `MONGO_URI` at `mongodb://localhost:27217,localhost:27218,localhost:27219/smart_water?replicaSet=rs0` for that optional cluster. Do not run it beside the host replica set.

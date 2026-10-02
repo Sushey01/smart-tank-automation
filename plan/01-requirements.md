@@ -21,10 +21,11 @@
    - `GET /api/telemetry/analytics/averages`
    - `GET /api/telemetry/history`
    - `GET /api/telemetry/summary`
-7. Seed script writes `synthetic_sensor_dataset.json` with 1200 documents from `2026-09-01T00:00:00.000Z`, gaps of 3–8 seconds. It does not require MongoDB.
-8. Benchmark script prints `explain('executionStats')` for a recent-readings query with a collection scan hint and with the `device_time` index.
-9. React UI: dashboard, history with CSV, alerts, cluster (failover evidence). Header control arms a browser siren for overflow and dry-run.
-10. Smoke script calls every GET route and expects HTTP 400 for a bad date, a bad bucket, an unknown device, and an unknown alert reason.
+7. Seed script writes `synthetic_sensor_dataset.json` with 1200 documents from `2026-09-01T00:00:00.000Z`, gaps of 3–8 seconds, and inserts them into `sensor_activations` with `source: "seed"`. Live MQTT documents are not deleted.
+8. CRUD on stored readings: MQTT or `POST /api/telemetry` creates, the GET routes read, `PATCH /api/telemetry/:id` updates the level, and `DELETE /api/telemetry/:id` removes one document.
+9. Benchmark script prints `explain('executionStats')` for a recent-readings query with a collection scan hint and with the `device_time` index.
+10. React UI: dashboard, history with CSV, alerts, cluster (failover evidence). Header control arms a browser siren for overflow and dry-run.
+11. Smoke script calls every route, including create, update, and delete, and expects HTTP 400 for a bad date, a bad bucket, an unknown device, an unknown alert reason, and a level outside 0–100.
 
 ## Non-functional
 

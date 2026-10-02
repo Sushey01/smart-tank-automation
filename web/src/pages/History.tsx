@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Download } from 'lucide-react';
 import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { getHistory, getHistorySeries } from '../api/telemetry';
+import { createReading, deleteReading, getHistory, getHistorySeries } from '../api/telemetry';
+import { useToast } from '../components/toast-context';
 import { DataTable } from '../components/DataTable';
 import { EmptyState, ErrorState, Skeleton } from '../components/States';
 import { downloadCsv, errorMessage, formatClock, formatNumber, formatWhen } from '../lib/format';
@@ -10,10 +11,30 @@ import { downloadCsv, errorMessage, formatClock, formatNumber, formatWhen } from
 const poll = { refetchInterval: 5000, refetchIntervalInBackground: false } as const;
 
 export function HistoryPage() {
+  const toast = useToast();
+  const queryClient = useQueryClient();
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [page, setPage] = useState(1);
   const [bucket, setBucket] = useState<'minute' | 'hour'>('minute');
+  const [level, setLevel] = useState('50');
+  const refresh = () => queryClient.invalidateQueries();
+  const create = useMutation({
+    mutationFn: () => createReading(Number(level)),
+    onSuccess: () => {
+      toast.push('Reading stored');
+      refresh();
+    },
+    onError: (error) => toast.push(errorMessage(error), 'danger'),
+  });
+  const remove = useMutation({
+    mutationFn: (id: string) => deleteReading(id),
+    onSuccess: () => {
+      toast.push('Reading deleted');
+      refresh();
+    },
+    onError: (error) => toast.push(errorMessage(error), 'danger'),
+  });
   const range = {
     from: from ? new Date(from).toISOString() : undefined,
     to: to ? new Date(to).toISOString() : undefined,
@@ -64,7 +85,14 @@ export function HistoryPage() {
           <span className="mb-1 block text-ink-muted">To</span>
           <input type="datetime-local" className="w-full rounded-xl border border-surface-border bg-surface-card px-3 py-2" value={to} onChange={(event) => { setTo(event.target.value); setPage(1); }} />
         </label>
+        <label className="text-sm">
+          <span className="mb-1 block text-ink-muted">New level %</span>
+          <input type="number" min={0} max={100} step={0.1} className="w-full rounded-xl border border-surface-border bg-surface-card px-3 py-2" value={level} onChange={(event) => setLevel(event.target.value)} />
+        </label>
         <div className="flex items-end gap-2">
+          <button type="button" className="rounded-xl bg-brand-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-40" disabled={create.isPending} onClick={() => create.mutate()}>
+            Store reading
+          </button>
           {(['minute', 'hour'] as const).map((item) => (
             <button key={item} type="button" className={`badge ${bucket === item ? 'border-brand-600 bg-brand-600 text-white' : ''}`} onClick={() => setBucket(item)} aria-pressed={bucket === item}>
               {item}
@@ -110,6 +138,22 @@ export function HistoryPage() {
               { key: 'litres', header: 'Litres', render: (row) => formatNumber(row.telemetry.water_tank.volume_litres, 0) },
               { key: 'valve', header: 'Valve', render: (row) => row.telemetry.actuator_states.inlet_valve },
               { key: 'pump', header: 'Pump', render: (row) => row.telemetry.actuator_states.booster_pump },
+              {
+                key: 'delete',
+                header: 'Delete',
+                render: (row) => (
+                  <button
+                    type="button"
+                    className="rounded-xl border border-surface-border px-3 py-1 text-xs"
+                    disabled={!row._id || remove.isPending}
+                    onClick={() => {
+                      if (row._id && window.confirm('Delete this stored reading?')) remove.mutate(row._id);
+                    }}
+                  >
+                    Delete
+                  </button>
+                ),
+              },
             ]}
           />
           <div className="mt-4 flex items-center justify-between text-sm">

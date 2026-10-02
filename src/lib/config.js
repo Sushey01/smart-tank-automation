@@ -17,4 +17,10 @@ module.exports = {
   PORT,
   DB_NAME: databaseName(MONGO_URI),
   COLLECTION: 'sensor_activations',
+  COLLECTIONS: {
+    READINGS: 'sensor_activations',
+    HOMES: 'homes',
+    DEVICES: 'devices',
+    ALERTS: 'alerts',
+  },
 };

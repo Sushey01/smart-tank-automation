@@ -11,7 +11,6 @@
 - [x] Implement file-only `src/seed.js` and `src/benchmark.js`
 - [x] Implement `src/smoke.js` for every GET route
 - [x] Point `scripts/replica-init.js` at ports 27017–27019 and refuse a foreign `mongod`
-- [x] Keep optional `docker-compose.yml` on ports 27217–27219 plus Mosquitto
 - [x] Rebuild `web/` around one tank, history, alerts, cluster, and the siren
 - [x] Write `README.md`, `web/README.md`, `.env.example`, and `docs/failover-steps.md`
 - [ ] Marker: compare device count, record count, and endpoints with the brief

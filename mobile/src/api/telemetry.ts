@@ -1,4 +1,4 @@
-import { apiGet, apiSend } from './client';
+import { apiGet } from './client';
 import type { AverageRow, HistorySeries, PageResult, SensorReading, TankSummary } from '../types';
 
 function query(params: Record<string, string | number | undefined>) {
@@ -8,10 +8,6 @@ function query(params: Record<string, string | number | undefined>) {
   }
   const text = search.toString();
   return text ? `?${text}` : '';
-}
-
-export function getLatest() {
-  return apiGet<{ reading: SensorReading | null }>('/api/telemetry/latest');
 }
 
 export function getSummary() {
@@ -26,26 +22,10 @@ export function getAverages() {
   return apiGet<{ devices: AverageRow[] }>('/api/telemetry/analytics/averages');
 }
 
-export function getHistory(params: { from?: string; to?: string; page?: number; limit?: number }) {
+export function getHistory(params: { page?: number; limit?: number }) {
   return apiGet<PageResult<SensorReading>>(`/api/telemetry/history${query(params)}`);
 }
 
-export function getHistorySeries(params: { from?: string; to?: string; bucket: 'minute' | 'hour' }) {
+export function getHistorySeries(params: { from?: string; bucket: 'minute' | 'hour' }) {
   return apiGet<HistorySeries>(`/api/telemetry/history${query(params)}`);
-}
-
-export function createReading(ultrasonicDepthPct: number) {
-  return apiSend<{ reading: SensorReading }>('/api/telemetry', 'POST', {
-    ultrasonic_depth_pct: ultrasonicDepthPct,
-  });
-}
-
-export function updateReading(id: string, ultrasonicDepthPct: number) {
-  return apiSend<{ reading: SensorReading }>(`/api/telemetry/${id}`, 'PATCH', {
-    ultrasonic_depth_pct: ultrasonicDepthPct,
-  });
-}
-
-export function deleteReading(id: string) {
-  return apiSend<{ deleted: boolean; id: string }>(`/api/telemetry/${id}`, 'DELETE');
 }

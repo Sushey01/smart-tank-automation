@@ -1,4 +1,4 @@
-const base = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '');
+const base = (process.env.EXPO_PUBLIC_API_BASE_URL ?? '').replace(/\/$/, '');
 
 export class ApiError extends Error {
   status: number;
@@ -10,10 +10,13 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+async function request<T>(path: string): Promise<T> {
+  if (!base) {
+    throw new ApiError(0, 'Set EXPO_PUBLIC_API_BASE_URL to the phone base URL printed by the API');
+  }
   let response: Response;
   try {
-    response = await fetch(`${base}${path}`, init);
+    response = await fetch(`${base}${path}`);
   } catch {
     throw new ApiError(0, 'Backend unreachable');
   }
@@ -32,12 +35,4 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export function apiGet<T>(path: string): Promise<T> {
   return request<T>(path);
-}
-
-export function apiSend<T>(path: string, method: 'POST' | 'PATCH' | 'DELETE', body?: unknown): Promise<T> {
-  return request<T>(path, {
-    method,
-    headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
 }

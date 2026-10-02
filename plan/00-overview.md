@@ -24,10 +24,9 @@ simulated hub → MQTT (`mqtt://127.0.0.1:1883`, topic `iothings/home/telemetry`
 In scope:
 
 - One device, `HOME_HUB_01`, and one nested `telemetry` object.
-- Local Mosquitto, host `mongod` processes, ingestion, REST, a file-only seed, benchmark, smoke test.
+- Local Mosquitto, host `mongod` processes, ingestion, REST, seed, benchmark, smoke test.
 - React dashboard with loading, empty, and error states, plus an armed browser siren.
 - Telegram `sendMessage` when an overflow or dry-run starts, and once when it clears. The bot token stays in `.env`.
-- Optional Docker Compose path that does not bind port 27017.
 
 Out of scope:
 

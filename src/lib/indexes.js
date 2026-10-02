@@ -19,4 +19,20 @@ async function ensureIndexes(collection) {
   );
 }
 
-module.exports = { ensureIndexes, THIRTY_DAYS_SECONDS };
+async function ensureAllIndexes(db) {
+  const readings = db.collection('sensor_activations');
+  await ensureIndexes(readings);
+
+  const devices = db.collection('devices');
+  await devices.createIndex({ device_id: 1 }, { unique: true, name: 'device_id_unique' }).catch(() => {});
+  await devices.createIndex({ home_id: 1 }, { name: 'device_home' }).catch(() => {});
+
+  const homes = db.collection('homes');
+  await homes.createIndex({ home_id: 1 }, { unique: true, name: 'home_id_unique' }).catch(() => {});
+
+  const alerts = db.collection('alerts');
+  await alerts.createIndex({ device_id: 1, timestamp: -1 }, { name: 'alert_device_time' }).catch(() => {});
+  await alerts.createIndex({ severity: 1, timestamp: -1 }, { name: 'alert_severity_time' }).catch(() => {});
+}
+
+module.exports = { ensureIndexes, ensureAllIndexes, THIRTY_DAYS_SECONDS };

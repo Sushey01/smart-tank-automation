@@ -11,13 +11,15 @@
     "simulator": "node src/simulator.js",
     "seed": "node src/seed.js",
     "benchmark": "node src/benchmark.js",
-    "smoke": "node src/smoke.js"
+    "smoke": "node src/smoke.js",
+    "test": "node src/test.js"
   },
   "dependencies": {
     "cors": "^2.8.5",
     "dotenv": "^16.6.1",
     "express": "^4.21.2",
     "mongodb": "^6.12.0",
-    "mqtt": "^5.10.3"
+    "mqtt": "^5.10.3",
+    "swagger-ui-express": "^5.0.1"
   }
 }
