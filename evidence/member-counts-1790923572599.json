@@ -1,0 +1,18 @@
+{
+  "timestamp": "2026-10-02T06:46:12.598Z",
+  "main_collection": "sensor_activations",
+  "counts": {
+    "127.0.0.1:27017": {
+      "status": "ONLINE",
+      "count": 30985
+    },
+    "127.0.0.1:27018": {
+      "status": "ONLINE",
+      "count": 30985
+    },
+    "127.0.0.1:27019": {
+      "status": "ONLINE",
+      "count": 30985
+    }
+  }
+}

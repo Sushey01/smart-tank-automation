@@ -1,0 +1,31 @@
+{
+  "timestamp": "2026-10-02T06:46:12.598Z",
+  "error": null,
+  "set": "rs0",
+  "members": [
+    {
+      "name": "localhost:27017",
+      "state": "PRIMARY",
+      "health": 1,
+      "uptime_seconds": 3613,
+      "electionTime": "7691942954306371585",
+      "optimeDate": "2026-10-02T06:46:10.000Z"
+    },
+    {
+      "name": "localhost:27018",
+      "state": "SECONDARY",
+      "health": 1,
+      "uptime_seconds": 3553,
+      "electionTime": null,
+      "optimeDate": "2026-10-02T06:46:10.000Z"
+    },
+    {
+      "name": "localhost:27019",
+      "state": "SECONDARY",
+      "health": 1,
+      "uptime_seconds": 3553,
+      "electionTime": null,
+      "optimeDate": "2026-10-02T06:46:10.000Z"
+    }
+  ]
+}

@@ -1,0 +1,101 @@
+{
+  "timestamp": "2026-10-02T06:45:03.464Z",
+  "database": "smart_water",
+  "collection": "sensor_activations",
+  "sample_count": 3,
+  "documents": [
+    {
+      "_id": "6abf51b4a0fda32002f71384",
+      "device_id": "HOME_HUB_01",
+      "device_type": "water_tank",
+      "location": "home",
+      "timestamp": "2026-10-02T06:39:48.003Z",
+      "metadata": {
+        "firmware": "v2.4.1",
+        "signal_rssi": -75
+      },
+      "telemetry": {
+        "water_tank": {
+          "ultrasonic_depth_pct": 44.8,
+          "volume_litres": 896,
+          "distance_cm": 110.4
+        },
+        "float_switches": {
+          "high_level_overflow": false,
+          "low_level_dry_run": false
+        },
+        "actuator_states": {
+          "inlet_valve": "OPEN",
+          "booster_pump": "ACTIVE"
+        },
+        "control_mode": "AUTO"
+      },
+      "alert_reasons": [],
+      "alert": false,
+      "ingested_at": "2026-10-02T06:39:48.011Z",
+      "source": "mqtt"
+    },
+    {
+      "_id": "6abf51b3a0fda32002f71383",
+      "device_id": "HOME_HUB_01",
+      "device_type": "water_tank",
+      "location": "home",
+      "timestamp": "2026-10-02T06:39:47.387Z",
+      "metadata": {
+        "firmware": "v2.4.1",
+        "signal_rssi": -90
+      },
+      "telemetry": {
+        "water_tank": {
+          "ultrasonic_depth_pct": 35.8,
+          "volume_litres": 716,
+          "distance_cm": 128.4
+        },
+        "float_switches": {
+          "high_level_overflow": false,
+          "low_level_dry_run": false
+        },
+        "actuator_states": {
+          "inlet_valve": "OPEN",
+          "booster_pump": "ACTIVE"
+        },
+        "control_mode": "AUTO"
+      },
+      "alert_reasons": [],
+      "alert": false,
+      "ingested_at": "2026-10-02T06:39:47.388Z",
+      "source": "mqtt"
+    },
+    {
+      "_id": "6abf51afa0fda32002f71382",
+      "device_id": "HOME_HUB_01",
+      "device_type": "water_tank",
+      "location": "home",
+      "timestamp": "2026-10-02T06:39:43.207Z",
+      "metadata": {
+        "firmware": "v2.4.1",
+        "signal_rssi": -49
+      },
+      "telemetry": {
+        "water_tank": {
+          "ultrasonic_depth_pct": 28.7,
+          "volume_litres": 574,
+          "distance_cm": 142.6
+        },
+        "float_switches": {
+          "high_level_overflow": false,
+          "low_level_dry_run": false
+        },
+        "actuator_states": {
+          "inlet_valve": "OPEN",
+          "booster_pump": "ACTIVE"
+        },
+        "control_mode": "AUTO"
+      },
+      "alert_reasons": [],
+      "alert": false,
+      "ingested_at": "2026-10-02T06:39:43.209Z",
+      "source": "mqtt"
+    }
+  ]
+}

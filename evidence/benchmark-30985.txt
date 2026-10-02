@@ -1,0 +1,24 @@
+========================================================================================
+                           QUERY EXECUTION BENCHMARK RESULTS                            
+========================================================================================
+Database:               smart_water
+Collection:             sensor_activations
+Total Stored Documents: 30985
+Query Pattern:          find({ device_id: "HOME_HUB_01" }).sort({ timestamp: -1 }).limit(50)
+Timestamp:              2026-10-02T06:46:14.711Z
+----------------------------------------------------------------------------------------
+Metric                          COLLSCAN (Unindexed)      IXSCAN (device_time)    Difference
+----------------------------------------------------------------------------------------
+Query Execution Stage           SORT                      LIMIT                   Index B-Tree Scan
+Documents Returned              50                        50                      Exact Match (50)
+Documents Examined (Read)       30985                     50                      30935 fewer reads
+Keys Examined                   0                         50                      O(log N) traversal
+Execution Time (ms)             105 ms                    1 ms                    Speedup: 105.0x
+========================================================================================
+
+Theoretical Analysis:
+- In the COLLSCAN stage, the query engine performs a linear O(N) traversal across all
+  30985 documents in memory/disk to identify candidate matches and apply in-memory sorting.
+- With the compound B-Tree index { device_id: 1, timestamp: -1 }, candidate keys are co-located
+  in sorted temporal order. The database engine performs an efficient O(log N) index seek and
+  reads only the exact 50 documents needed, eliminating sorting overhead.

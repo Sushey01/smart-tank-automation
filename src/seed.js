@@ -1,8 +1,8 @@
 /**
- * Writes synthetic_sensor_dataset.json and loads those documents into
- * smart_water.sensor_activations. Live MQTT readings are left in place.
- * 1200 tank documents, timestamps stepping forward from 2026-09-01
- * by a random 3–8 second gap.
+ * Writes synthetic_sensor_dataset.json and loads documents into smart_water.sensor_activations.
+ * Supports configurable scale: node src/seed.js [COUNT] (e.g., npm run seed -- 100000).
+ * Generates unique timestamps per device so the unique compound index { device_id: 1, timestamp: 1 } succeeds.
+ * Seeds companion collections: homes, devices, alerts.
  */
 
 const fs = require('fs');
@@ -10,10 +10,12 @@ const path = require('path');
 const { MongoClient } = require('mongodb');
 const { COLLECTION, DB_NAME, MONGO_URI } = require('./lib/config');
 const { HOME_HUB, buildPayload, toStoredReading } = require('./lib/devices');
-const { ensureIndexes, ensureAllIndexes } = require('./lib/indexes');
+const { ensureAllIndexes } = require('./lib/indexes');
 
 const START = new Date('2026-09-01T00:00:00.000Z');
-const COUNT = 1200;
+
+const countArg = process.argv.slice(2).find((arg) => /^\d+$/.test(arg));
+const TARGET_COUNT = countArg ? parseInt(countArg, 10) : 1200;
 
 const SAMPLE_HOMES = [
   {
@@ -97,24 +99,10 @@ function toJson(doc) {
   };
 }
 
-function buildDocs() {
-  let cursor = START.getTime();
-  const docs = [];
-  for (let index = 0; index < COUNT; index += 1) {
-    if (index > 0) cursor += gapMs();
-    const at = new Date(cursor);
-    const doc = toStoredReading(buildPayload({ timestamp: at }), new Date(cursor + 150));
-    doc.source = 'seed';
-    docs.push(doc);
-  }
-  return docs;
-}
-
 async function main() {
-  const docs = buildDocs();
-  const out = path.join(__dirname, '..', 'synthetic_sensor_dataset.json');
-  fs.writeFileSync(out, `${JSON.stringify(docs.map(toJson), null, 2)}\n`);
-  console.log(`[seed] wrote ${docs.length} documents to ${out}`);
+  console.log('============================================================');
+  console.log(` Seeding database ${DB_NAME} (Target documents: ${TARGET_COUNT})`);
+  console.log('============================================================\n');
 
   const mongo = new MongoClient(MONGO_URI, {
     retryWrites: true,
@@ -122,6 +110,7 @@ async function main() {
     writeConcern: { w: 'majority' },
     serverSelectionTimeoutMS: 8000,
   });
+
   await mongo.connect();
   const db = mongo.db(DB_NAME);
 
@@ -137,46 +126,83 @@ async function main() {
   await devicesCollection.insertMany(SAMPLE_DEVICES);
   console.log(`[seed] seeded ${SAMPLE_DEVICES.length} devices`);
 
-  // 3. Seed sensor activations (telemetry)
+  // 3. Clear previous seed documents in sensor_activations
   const collection = db.collection(COLLECTION);
   const removed = await collection.deleteMany(
     { device_id: HOME_HUB.device_id, source: 'seed' },
     { writeConcern: { w: 'majority' } },
   );
   console.log(`[seed] removed ${removed.deletedCount} previous seed documents`);
-  for (let offset = 0; offset < docs.length; offset += 500) {
-    const batch = docs.slice(offset, offset + 500);
-    await collection.insertMany(batch, { writeConcern: { w: 'majority' }, ordered: true });
-    console.log(`[seed] inserted ${Math.min(offset + 500, docs.length)} / ${docs.length}`);
+
+  // Ensure all indexes exist before bulk inserting
+  await ensureAllIndexes(db);
+  console.log('[seed] verified indexes on all collections (including unique {device_id:1, timestamp:1})');
+
+  // 4. Batched generation and insertion
+  const BATCH_SIZE = 2000;
+  let cursor = START.getTime();
+  const sampleExport = [];
+  const alertDocs = [];
+
+  let insertedTotal = 0;
+
+  for (let offset = 0; offset < TARGET_COUNT; offset += BATCH_SIZE) {
+    const currentBatchSize = Math.min(BATCH_SIZE, TARGET_COUNT - offset);
+    const batch = [];
+
+    for (let i = 0; i < currentBatchSize; i += 1) {
+      cursor += gapMs(); // Strictly increasing timestamp ensures uniqueness per device
+      const at = new Date(cursor);
+      const doc = toStoredReading(
+        buildPayload({ timestamp: at, levelPct: 30 + (Math.sin(cursor / 500000) * 40 + 20) }),
+        new Date(cursor + 100),
+      );
+      doc.source = 'seed';
+      batch.push(doc);
+
+      // Collect sample for synthetic_sensor_dataset.json (up to 1200 docs)
+      if (sampleExport.length < 1200) {
+        sampleExport.push(toJson(doc));
+      }
+
+      // Collect alert transitions
+      if (doc.alert && alertDocs.length < 60) {
+        alertDocs.push({
+          device_id: doc.device_id,
+          home_id: 'H001',
+          severity: doc.alert_reasons.some((r) => r.includes('OVERFLOW') || r.includes('LEAK')) ? 'critical' : 'warning',
+          reasons: doc.alert_reasons,
+          message: `Operational alert: ${doc.alert_reasons.join(', ')}`,
+          timestamp: doc.timestamp,
+          acknowledged: false,
+          source: 'seed',
+        });
+      }
+    }
+
+    await collection.insertMany(batch, { writeConcern: { w: 'majority' }, ordered: false });
+    insertedTotal += batch.length;
+    console.log(`[seed] inserted ${insertedTotal} / ${TARGET_COUNT} documents into ${COLLECTION}`);
   }
 
-  // 4. Seed alerts audit collection
+  // 5. Seed alerts collection
   const alertsCollection = db.collection('alerts');
   await alertsCollection.deleteMany({ source: 'seed' });
-  const alertDocs = docs
-    .filter((d) => d.alert)
-    .slice(0, 60)
-    .map((d) => ({
-      device_id: d.device_id,
-      home_id: 'H001',
-      severity: d.alert_reasons.some((r) => r.includes('OVERFLOW') || r.includes('LEAK')) ? 'critical' : 'warning',
-      reasons: d.alert_reasons,
-      message: `Operational alert: ${d.alert_reasons.join(', ')}`,
-      timestamp: d.timestamp,
-      acknowledged: false,
-      source: 'seed',
-    }));
   if (alertDocs.length > 0) {
     await alertsCollection.insertMany(alertDocs);
     console.log(`[seed] seeded ${alertDocs.length} alert records into alerts collection`);
   }
 
-  await ensureAllIndexes(db);
-  console.log(`[seed] all indexes verified on ${DB_NAME} (sensor_activations, homes, devices, alerts)`);
+  // 6. Write synthetic_sensor_dataset.json file
+  const outPath = path.join(__dirname, '..', 'synthetic_sensor_dataset.json');
+  fs.writeFileSync(outPath, `${JSON.stringify(sampleExport, null, 2)}\n`);
+  console.log(`[seed] exported ${sampleExport.length} sample documents to ${outPath}`);
+
+  console.log('\n[seed] Seed completed successfully. Data is synthetic (UK GDPR compliant).');
   await mongo.close();
 }
 
 main().catch((err) => {
-  console.error('[seed] failed', err.message);
+  console.error('[seed] failed:', err);
   process.exit(1);
 });

@@ -1,0 +1,59 @@
+{
+  "timestamp": "2026-10-02T06:45:03.464Z",
+  "database": "smart_water",
+  "collection": "sensor_activations",
+  "indexes": [
+    {
+      "name": "_id_",
+      "key": {
+        "_id": 1
+      },
+      "unique": false,
+      "expireAfterSeconds": null
+    },
+    {
+      "name": "device_time",
+      "key": {
+        "device_id": 1,
+        "timestamp": -1
+      },
+      "unique": false,
+      "expireAfterSeconds": null
+    },
+    {
+      "name": "alert_time",
+      "key": {
+        "alert": 1,
+        "timestamp": -1
+      },
+      "unique": false,
+      "expireAfterSeconds": null
+    },
+    {
+      "name": "type_time",
+      "key": {
+        "device_type": 1,
+        "timestamp": -1
+      },
+      "unique": false,
+      "expireAfterSeconds": null
+    },
+    {
+      "name": "timestamp_ttl",
+      "key": {
+        "timestamp": 1
+      },
+      "unique": false,
+      "expireAfterSeconds": 2592000
+    },
+    {
+      "name": "device_time_unique",
+      "key": {
+        "device_id": 1,
+        "timestamp": 1
+      },
+      "unique": true,
+      "expireAfterSeconds": null
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+
+> smart-tank-automation@1.0.0 test
+> node src/test.js
+
+============================================================
+ IoThings Sensor Automation System - Automated Test Suite
+ Module: CMP6207 Modern Data Stores | Verification Suite
+============================================================
+
+[PASS] Validation: rejects malformed payloads and invalid timestamps
+[PASS] Validation: accepts correct HOME_HUB_01 payload structure
+[PASS] Rules Engine: triggers TANK_OVERFLOW at level >= 85%
+[PASS] Rules Engine: triggers TANK_DRY_RUN at level <= 25%
+[PASS] Rules Engine: triggers LEAK_DETECTED on sudden water level drop
+[PASS] Automation Control: prevents valve and pump chattering via dual-threshold hysteresis
+[PASS] Automation Control: supports MANUAL override state persistence
+[PASS] Distributed Cluster: verifies replica set connectivity & status
+[PASS] Data Modeling: verifies collections and schema setup
+[PASS] Data Integrity: compound unique index enforces duplicate write rejection
+[PASS] Telemetry CRUD: insert, read, update with alert recomputation, and delete
+[PASS] Registry CRUD [Homes]: insert, query by home_id, patch, and delete
+[PASS] Registry CRUD [Devices]: insert, query by device_id, patch, and delete
+[PASS] Dead-Letter Queue: stores invalid messages with TTL indexing
+
+============================================================
+ Test Summary: 14 passed, 0 failed.
+============================================================
+
