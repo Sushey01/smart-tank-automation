@@ -7,10 +7,6 @@
 [![React](https://img.shields.io/badge/Frontend-React_18_%2B_Vite-61dafb.svg)](https://react.dev/)
 [![Expo](https://img.shields.io/badge/Mobile-Expo_React_Native-black.svg)](https://expo.dev/)
 
-> **Academic Module:** CMP6207 Modern Data Stores (Level 6)  
-> **Institution:** Birmingham City University  
-> **Coursework Deliverable:** Distributed NoSQL Sensor Ingestion, Automation, and Analytics Platform for **IoThings Home Automation Solutions**.
-
 ---
 
 ## Overview
@@ -225,14 +221,3 @@ To demonstrate distributed high availability:
 ├── package.json
 └── README.md
 ```
-
----
-
-## Assessment Compliance
-
-This codebase and accompanying report directly address all Learning Outcomes for **CMP6207 Modern Data Stores**:
-* **LO1 (20%)**: Comprehensive theoretical appraisal of NoSQL types (Key-Value, Document, Wide-Column, Graph), CAP, PACELC, and BASE vs ACID.
-* **LO2 (20%)**: Critical comparison of Relational vs NoSQL, schema evolution, impedance mismatch, and evaluation of *"NoSQL as an extension of SQL"*.
-* **LO4 (20%)**: Hands-on deployment of a distributed 3-node MongoDB replica set with majority write concerns, failover verification, index optimizations, and full CRUD provision.
-
-See [report/REPORT.md](report/REPORT.md) for the complete academic report.
