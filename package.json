@@ -17,6 +17,8 @@
     "evidence": "node scripts/generate-evidence.js",
     "measure:failover": "node scripts/measure-failover.js",
     "quorum:demo": "node scripts/quorum-demo.js",
+    "backup:demo": "node scripts/backup-demo.js",
+    "crud:demo": "node scripts/crud-demo.js",
     "report:wordcount": "node scripts/count-report-words.js"
   },
   "dependencies": {

@@ -1,0 +1,26 @@
+{
+  "timestamp": "2026-10-02T07:29:59.169Z",
+  "source_database": "smart_water",
+  "restore_database": "smart_water_restore_demo",
+  "archive_size_bytes": 759203,
+  "dump_duration_ms": 1236,
+  "restore_duration_ms": 5763,
+  "original_counts": {
+    "alerts": 387,
+    "sensor_activations": 31451,
+    "devices": 4,
+    "rejected_messages": 0,
+    "failover_probe": 19,
+    "homes": 2
+  },
+  "restored_counts": {
+    "alerts": 387,
+    "sensor_activations": 31451,
+    "devices": 4,
+    "rejected_messages": 0,
+    "failover_probe": 19,
+    "homes": 2
+  },
+  "count_parity_verified": true,
+  "data_loss_detected": false
+}
