@@ -8,6 +8,7 @@ import { StatCard } from '../components/StatCard';
 import { EmptyState, ErrorState, Skeleton } from '../components/States';
 import { SensorStatus } from '../components/SensorStatus';
 import { TankGauge } from '../components/TankGauge';
+import { SmartWaterInsights } from '../components/SmartWaterInsights';
 import { ageLabel, errorMessage, formatNumber, formatWhen, reasonLabel } from '../lib/format';
 import type { Trend } from '../types';
 
@@ -75,6 +76,7 @@ export function Dashboard() {
         <StatCard label="Trend" value={data.trend.charAt(0).toUpperCase() + data.trend.slice(1)} hint={`${formatNumber(data.rate_litres_per_hour, 1)} L/h over 15 min`} icon={trendIcon(data.trend)} />
         <StatCard label="Time estimate" value={estimateText(data.estimate.kind, data.estimate.minutes)} hint={estimateHint(data.estimate.kind)} icon={<Clock size={18} />} />
       </section>
+      <SmartWaterInsights />
       <SensorStatus reading={data.reading} status={data.status} />
       {!data.reading && (
         <EmptyState title="No readings yet" body="Start the simulator so HOME_HUB_01 publishes a tank document." />

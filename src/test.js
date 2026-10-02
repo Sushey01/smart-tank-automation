@@ -21,6 +21,15 @@ const {
   setControlState,
 } = require('./lib/devices');
 const { ensureAllIndexes } = require('./lib/indexes');
+const WATER_CONFIG = require('./lib/water-config');
+const {
+  buildConsumptionPipeline,
+  getTodayConsumption,
+  getDailyConsumption,
+  getMonthlyConsumption,
+  predictDepletion,
+  evaluateAbnormalOvernightUsage,
+} = require('./lib/analytics');
 
 let passed = 0;
 let failed = 0;
@@ -356,6 +365,113 @@ async function runTests() {
       const found = await dlq.findOne({ _id: res.insertedId });
       assert.strictEqual(found.reason, 'invalid_json');
       await dlq.deleteOne({ _id: res.insertedId });
+    });
+
+    // Test 15: MongoDB Aggregation Pipeline - Water Consumption Summation
+    await reportAsync('Aggregation Pipeline: correctly sums non-refill volume drops', async () => {
+      const pipeline = buildConsumptionPipeline(HOME_HUB.device_id, null, null, 'day');
+      assert.ok(Array.isArray(pipeline), 'Pipeline is an array');
+      assert.ok(pipeline.some((stage) => stage.$setWindowFields), 'Pipeline uses $setWindowFields for delta tracking');
+      assert.ok(pipeline.some((stage) => stage.$group && stage.$group._id && stage.$group._id.$dateTrunc), 'Pipeline uses $dateTrunc for time bucketing');
+
+      const todayUsage = await getTodayConsumption(db, HOME_HUB.device_id);
+      assert.ok(typeof todayUsage.today_litres === 'number');
+      assert.ok(todayUsage.today_litres >= 0);
+    });
+
+    // Test 16: Monthly Consumption Aggregation & Comparison
+    await reportAsync('Aggregation Pipeline: evaluates monthly consumption and history', async () => {
+      const monthly = await getMonthlyConsumption(db, HOME_HUB.device_id);
+      assert.ok(typeof monthly.current_month_litres === 'number');
+      assert.ok(monthly.current_month_litres > 0);
+      assert.strictEqual(monthly.has_sufficient_history, true);
+    });
+
+    // Test 17: Leak Detection: ignores minor sensor noise (<= 0.25%)
+    await reportAsync('Leak Engine: ignores minor sensor fluctuations and noise within tolerance', async () => {
+      const testCol = db.collection('test_noise_readings');
+      await testCol.deleteMany({});
+      const noiseDocs = [
+        {
+          device_id: 'DEV_NOISE_01',
+          timestamp: new Date('2026-10-02T02:00:00Z'),
+          telemetry: { water_tank: { ultrasonic_depth_pct: 70.0, volume_litres: 1400 }, actuator_states: { booster_pump: 'INACTIVE', inlet_valve: 'CLOSED' } },
+        },
+        {
+          device_id: 'DEV_NOISE_01',
+          timestamp: new Date('2026-10-02T02:05:00Z'),
+          telemetry: { water_tank: { ultrasonic_depth_pct: 69.85, volume_litres: 1397 }, actuator_states: { booster_pump: 'INACTIVE', inlet_valve: 'CLOSED' } },
+        },
+      ];
+      await testCol.insertMany(noiseDocs);
+      const res = await evaluateAbnormalOvernightUsage({ collection: () => testCol }, 'DEV_NOISE_01');
+      assert.strictEqual(res.detected, false);
+      await testCol.drop().catch(() => {});
+    });
+
+    // Test 18: Anomaly Engine: detects persistent overnight loss and calculates excess litres
+    await reportAsync('Leak Engine: detects persistent overnight loss and computes excess volume', async () => {
+      const testCol = db.collection('test_leak_readings');
+      const testAlerts = db.collection('test_leak_alerts');
+      await testCol.deleteMany({});
+      await testAlerts.deleteMany({});
+
+      const base = new Date('2026-10-02T02:00:00Z');
+      const leakDocs = [];
+      let lvl = 72.0;
+      for (let i = 0; i < 6; i += 1) {
+        lvl -= 0.4; // Total drop 2.4% (> 1.5% threshold)
+        leakDocs.push({
+          device_id: 'DEV_LEAK_01',
+          timestamp: new Date(base.getTime() + i * 5 * 60 * 1000),
+          telemetry: {
+            water_tank: { ultrasonic_depth_pct: Math.round(lvl * 10) / 10, volume_litres: Math.round(2000 * (lvl / 100)) },
+            actuator_states: { booster_pump: 'INACTIVE', inlet_valve: 'CLOSED' },
+          },
+        });
+      }
+      await testCol.insertMany(leakDocs);
+      const mockDb = {
+        collection: (name) => (name === 'alerts' ? testAlerts : testCol),
+      };
+      const res = await evaluateAbnormalOvernightUsage(mockDb, 'DEV_LEAK_01');
+      assert.strictEqual(res.detected, true);
+      assert.strictEqual(res.alert.alert_type, 'ABNORMAL_WATER_USAGE');
+      assert.ok(res.alert.estimated_excess_loss_litres >= 30);
+      assert.strictEqual(res.alert.severity, 'warning');
+    });
+
+    // Test 19: Duplicate alert suppression prevents spam
+    await reportAsync('Leak Engine: enforces cooldown and prevents duplicate alert spam', async () => {
+      const testCol = db.collection('test_leak_readings');
+      const testAlerts = db.collection('test_leak_alerts');
+      const mockDb = { collection: (name) => (name === 'alerts' ? testAlerts : testCol) };
+      const secondEval = await evaluateAbnormalOvernightUsage(mockDb, 'DEV_LEAK_01');
+      assert.strictEqual(secondEval.detected, true);
+      const alertCount = await testAlerts.countDocuments({ device_id: 'DEV_LEAK_01' });
+      assert.strictEqual(alertCount, 1, 'Duplicate alert was suppressed by cooldown check');
+
+      await testCol.drop().catch(() => {});
+      await testAlerts.drop().catch(() => {});
+    });
+
+    // Test 20: Depletion Prediction: projects remaining hours to 25% critical reserve
+    await reportAsync('Depletion Predictor: calculates remaining time based on active drain rate', async () => {
+      const prediction = await predictDepletion(db, HOME_HUB.device_id);
+      assert.ok(prediction, 'Prediction returned');
+      assert.ok(['draining', 'stable_or_filling', 'stable', 'critical_reached'].includes(prediction.status));
+      assert.ok(prediction.display);
+    });
+
+    // Test 21: Depletion Predictor: gracefully reports insufficient data or stable state
+    await reportAsync('Depletion Predictor: handles sparse data without fabricating numbers', async () => {
+      const emptyCol = db.collection('test_empty_col');
+      await emptyCol.deleteMany({});
+      const mockEmptyDb = { collection: () => emptyCol };
+      const res = await predictDepletion(mockEmptyDb, 'NON_EXISTENT_DEV');
+      assert.strictEqual(res.status, 'insufficient_data');
+      assert.strictEqual(res.display, '—');
+      await emptyCol.drop().catch(() => {});
     });
 
     await mongo.close();

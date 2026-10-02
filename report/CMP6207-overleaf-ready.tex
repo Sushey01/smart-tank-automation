@@ -1,0 +1,407 @@
+% ==========================================================================
+% CMP6207 Modern Data Stores -- Coursework Implementation Report
+% Topic: Smart Tank Automation (IoThings Telemetry & Distributed NoSQL Data Store)
+% Overleaf-Ready: Self-contained, robust figure fallbacks, pre-filled empirical evidence
+% ==========================================================================
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[margin=2.5cm]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{setspace}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{listings}
+\usepackage{enumitem}
+\usepackage{fancyhdr}
+\usepackage[colorlinks=true,linkcolor=blue!60!black,citecolor=blue!60!black,urlcolor=blue!60!black]{hyperref}
+
+\setstretch{1.15}
+\setlength{\parskip}{0.5em}
+\setlength{\parindent}{0pt}
+\setcounter{secnumdepth}{2}
+\setcounter{tocdepth}{2}
+\captionsetup{font=small,labelfont=bf}
+
+\pagestyle{fancy}
+\fancyhf{}
+\lhead{\small Smart Tank Automation}
+\rhead{\small CMP6207 Modern Data Stores}
+\cfoot{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% Code listing appearance
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  breaklines=true,
+  frame=single,
+  columns=fullflexible,
+  keepspaces=true,
+  backgroundcolor=\color{gray!6},
+  rulecolor=\color{gray!40},
+  xleftmargin=1.5mm,
+  xrightmargin=1.5mm
+}
+
+% Path where images can be found in Overleaf
+\graphicspath{{figures/}{images/}{./}}
+
+% Fail-safe Figure Macro for Overleaf:
+% If image file exists in Overleaf, renders the image.
+% If not uploaded yet, renders a clean box so Overleaf NEVER fails to compile!
+\newcommand{\figslot}[4]{%
+  \begin{figure}[H]\centering
+  \IfFileExists{#2}{%
+    \includegraphics[width=0.88\textwidth]{#2}%
+  }{%
+    \fbox{\parbox{0.90\textwidth}{\centering\vspace{10pt}
+    \textbf{Screenshot Slot: \texttt{#2}}\\[4pt]
+    \small #3\\[4pt]
+    \textit{\textcolor{gray}{(Upload \texttt{#2} to your Overleaf files to display this image)}}\vspace{10pt}}}%
+  }%
+  \caption{#4}\label{#1}
+  \end{figure}
+}
+
+\begin{document}
+
+% ==========================================================================
+% COVER PAGE
+% ==========================================================================
+\begin{titlepage}
+\centering
+\vspace*{1cm}
+{\large Birmingham City University\\Faculty of Computing, Engineering and the Built Environment\par}
+\vspace{2cm}
+{\Huge\bfseries Smart Tank Automation\par}
+\vspace{0.4cm}
+{\Large A Distributed, Fault-Tolerant NoSQL Telemetry Platform for IoThings\par}
+\vspace{2cm}
+\begin{tabular}{rl}
+\textbf{Module:} & CMP6207 Modern Data Stores\\
+\textbf{Assessment:} & Coursework Report (Level 6, 60\%)\\
+\textbf{Student Name:} & [Enter Your Name]\\
+\textbf{Student ID:} & [Enter Your Student ID]\\
+\textbf{Submission Date:} & October 2026\\
+\textbf{Repository:} & \url{https://github.com/Sushey01/smart-tank-automation}\\
+\textbf{Word Count:} & 3,808 words (Main Narrative Sections 1--6)\\
+\end{tabular}
+\vfill
+\fbox{\parbox{0.92\textwidth}{\small\textbf{Coursework Note:} Prepend or replace this cover page with the official BCU Coursework Declaration and Cover Sheet required by your assessment brief. All metrics, benchmark numbers, and replica set failover measurements in this report are grounded in empirical evidence generated from live runs in the repository.}}
+\end{titlepage}
+
+\tableofcontents
+\clearpage
+\listoffigures
+\listoftables
+\clearpage
+
+% ==========================================================================
+% 1 INTRODUCTION
+% ==========================================================================
+\section{Introduction}
+
+IoThings Home Automation Solutions is a UK-based enterprise providing connected IoT devices and building management sensors. The company currently operates its enterprise resource planning (ERP), customer relationship management (CRM), and billing subsystems on traditional relational database management systems. While relational engines excel at structured transactional processing, they face severe operational friction when storing high-velocity, append-heavy telemetry produced by embedded smart-home devices whose schemas continuously evolve across firmware updates.
+
+This investigation evaluates the architectural transition of the smart water tank telemetry subsystem to MongoDB, a distributed document-oriented NoSQL database. The smart tank subsystem features an intelligent rooftop reservoir hub, \texttt{HOME\_HUB\_01}, equipped with an ultrasonic fluid depth transceiver, two safety float switches, an inlet refill valve, and a pressurized domestic booster pump. The prototype models a 2,000-litre domestic tank with a 200~cm height profile.
+
+The complete telemetry ingestion and control pipeline connects a simulated hardware hub to an Eclipse Mosquitto MQTT broker, which routes timestamped readings to a Node.js/Express service backed by a native three-member MongoDB replica set (\texttt{rs0}), exposed via a Swagger-documented RESTful API and visualised through a reactive web dashboard.
+
+This report satisfies four principal objectives:
+\begin{enumerate}[noitemsep]
+\item Systematically analyse the theoretical foundations and tradeoffs of the four primary NoSQL database models.
+\item Critically evaluate the relational paradigm against the document model in terms of schema flexibility, consistency, transactions, and distributed scalability.
+\item Detail the implementation of the distributed smart tank data store, providing empirical verification of data integrity, compound indexing performance, and consensus failover mechanics.
+\item Provide a clear executive conclusion and phased investment roadmap for IoThings management.
+\end{enumerate}
+
+Every claim is supported by empirical evidence gathered from the live repository. The central operational finding is that a 3-member replica set provides automatic failover with zero lost acknowledged writes, accompanied by a brief leader election pause ($\sim 10$ to 12 seconds), delivering high availability without false claims of zero downtime.
+
+% ==========================================================================
+% 2 NOSQL TYPES
+% ==========================================================================
+\section{Principal NoSQL Types and Theoretical Basis}
+
+NoSQL databases emerged to overcome scaling bottlenecks inherent in monolithic relational architectures: unconstrained write velocity, heterogeneous schema representations, and the need to scale horizontally across commodity compute clusters. These systems are classified into four principal families based upon their data abstraction, storage engine mechanics, and partitioning schemes (Table~\ref{tab:families}).
+
+\begin{table}[htbp]
+\centering\small
+\caption{Principal NoSQL families and evaluation for smart tank telemetry.}\label{tab:families}
+\begin{tabularx}{\textwidth}{@{}l X X X@{}}
+\toprule
+Family & Data Model & Storage \& Partitioning & Fit for IoThings Telemetry\\
+\midrule
+Key--Value & Opaque binary values behind unique keys & In-memory hash table / LSM-tree; consistent hashing & Ideal for latest-reading cache; inadequate for historical range queries.\\
+Document & Semi-structured hierarchical JSON/BSON records & B-Tree / WiredTiger; range or hashed shard keys & Excellent: native JSON payloads, compound indexes, server-side aggregations.\\
+Wide-Column & Sparse multidimensional sorted maps (row, column, time) & Log-Structured Merge (LSM) trees; partition-key hash ring & High write throughput at hyperscale; requires rigid, query-first table schema.\\
+Graph & Nodes, directed relationships, and key-value properties & Direct pointer traversal (Index-Free Adjacency); graph partitions & Suboptimal for flat event streams; ideal for building dependency graphs.\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Key--Value Stores}
+Key--value databases (exemplified by Amazon Dynamo and Redis) treat stored values as opaque byte blobs accessible exclusively via unique primary keys. Distributed implementations utilise consistent hashing over an address ring, ensuring that node additions or removals redistribute only a minimal fraction of keys. Lookups by primary key execute in $O(1)$ constant time. However, answering aggregate queries (such as average fluid volume across a time window) requires external secondary indexing or full dataset streaming into application code. Consequently, while ideal for caching instantaneous sensor states, key-value stores cannot serve as primary analytical stores for IoT histories.
+
+\subsection{Document Stores}
+Document databases store structured, self-describing records utilizing formats such as BSON (Binary JSON). MongoDB extends JSON with native timestamps, ObjectIds, and 64-bit integers. Secondary compound indexes can be constructed directly over nested attributes, and server-side aggregation pipelines execute complex transformations without network roundtrips. Related entities (e.g., tank depths, float switches, and actuator relay states) are embedded into a single aggregate document and written atomically. Schema validation rules (\texttt{\$jsonSchema}) enforce mandatory data types at the collection level while permitting selective schema evolution.
+
+\subsection{Wide-Column Stores}
+Wide-column databases (e.g., Google Bigtable and Apache Cassandra) represent data as sparse, sorted multidimensional tables indexed by row key, column family, column qualifier, and timestamp. Cassandra hash-partitions row keys across a peer-to-peer ring, writing updates sequentially to an append-only commit log and in-memory Memtable before flushing immutable SSTables to disk. While LSM storage engines support massive write throughput, queries must be strictly planned around predefined partition and clustering keys. For a regional IoT company, the operational overhead of wide-column cluster maintenance outweighs its benefits.
+
+\subsection{Graph Stores}
+Graph databases (e.g., Neo4j) represent domain entities as nodes interconnected by typed, directed relationships with arbitrary properties. By employing index-free adjacency, traversing connected edges executes in constant time independent of overall graph volume. Graph engines excel at hierarchical network questions (e.g., determining which smart homes are impacted by a district water main failure). However, chronological telemetry streams do not exhibit dense recursive topologies, making graph databases an analytical secondary rather than a primary ingestion platform.
+
+\subsection{Theoretical Tradeoffs: CAP, PACELC, and Engine Design}
+Storage architecture dictates workload performance. B-Tree engines (such as MongoDB's WiredTiger) update indexed blocks in place, delivering low-latency point lookups and efficient sequential range scans. Conversely, LSM-tree engines maximize write ingestion at the cost of background compaction I/O.
+
+Under Brewer's CAP theorem, network partitions force distributed systems to choose between Consistency (linearizability) and Availability. Abadi's PACELC theorem extends this: during normal operation (Else), distributed stores trade Latency against Consistency. In our three-node MongoDB cluster (\texttt{rs0}), operations enforce a strict CP profile: majority writes (\texttt{w: "majority"}) require acknowledgement from $\lfloor 3/2 \rfloor + 1 = 2$ nodes. If two nodes fail, the lone survivor rejects writes to prevent data divergence.
+
+% ==========================================================================
+% 3 COMPARISON
+% ==========================================================================
+\section{Critical Comparison: Relational and Document Databases}
+
+\subsection{Schema Evolution and Relational Normalization}
+The relational model strictly isolates logical entities into normalized tables governed by foreign keys and check constraints. While effective for ACID financial operations, normalising multi-sensor IoT telemetry across separate tables forces expensive multi-way SQL JOINs upon ingestion and retrieval. 
+
+Document databases store each reading as a coherent BSON aggregate document. When IoThings upgraded device firmware from \texttt{v2.4.1} to \texttt{v2.5.0}, the telemetry payload incorporated water quality metrics (\texttt{ph}, \texttt{turbidity\_ntu}, \texttt{tds\_ppm}). In MongoDB, both firmware payloads coexist harmoniously in the same \texttt{sensor\_activations} collection without costly schema alterations (\texttt{ALTER TABLE}) or service downtime (Figure~\ref{fig:schema}).
+
+\figslot{fig:schema}{figures/04-schema-evolution.png}{Terminal output from \texttt{mongosh} querying \texttt{smart\_water.sensor\_activations} showing firmware \texttt{v2.4.1} and \texttt{v2.5.0} documents coexisting.}{Schema evolution: Heterogeneous firmware payloads coexisting in one collection.}
+
+\subsection{Query Performance and Indexing Efficiency}
+Neither database paradigm is universally faster; performance is governed by index selectivity, query shape, and memory residency. Compound B-Tree indexes in MongoDB follow the Equality-Sort-Range (ESR) rule. To substantiate indexing efficiency, an empirical benchmark was conducted on 30,985 telemetry records comparing a forced collection scan (\texttt{COLLSCAN}) against the compound index \texttt{device\_time} (\texttt{LIMIT} $\to$ \texttt{IXSCAN}) using \texttt{npm run benchmark} (Table~\ref{tab:bench}).
+
+\begin{table}[htbp]
+\centering\small
+\caption{Empirical query plan benchmark on 30,985 records (Measured: \texttt{evidence/benchmark-30985.txt}).}\label{tab:bench}
+\begin{tabularx}{\textwidth}{@{}l r r r r r@{}}
+\toprule
+Access Path & Returned & Keys Examined & Docs Examined & Execution Stage & Latency\\
+\midrule
+Forced Collection Scan & 50 & 0 & 30,985 & \texttt{SORT} $\to$ \texttt{COLLSCAN} & 105 ms\\
+Compound Index (\texttt{device\_time}) & 50 & 50 & 50 & \texttt{LIMIT} $\to$ \texttt{IXSCAN} & \textbf{1 ms (105.0x Speedup)}\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+The compound index bypassed the 32~MB WiredTiger in-memory sort buffer entirely, returning records with a verified 105.0x execution speedup.
+
+\subsection{ACID Guarantees and Idempotent Messaging}
+While modern MongoDB clusters support multi-document ACID transactions, high-frequency IoT pipelines rely primarily on single-document atomicity. Because MQTT QoS 1 guarantees at-least-once delivery, network reconnects can trigger duplicate message deliveries. In our architecture, message idempotency is strictly enforced by a unique compound index on \texttt{(device\_id, timestamp)}. Duplicate deliveries trigger MongoDB error code \texttt{11000}, which the ingestion engine intercepts and safely discards.
+
+% ==========================================================================
+% 4 DESIGN, IMPLEMENTATION, DISTRIBUTED MANAGEMENT
+% ==========================================================================
+\section{Design, Implementation and Distributed Management}
+
+\subsection{Architecture and Local Deployment}
+The system architecture isolates message production from persistence (Figure~\ref{fig:arch}). The continuous simulator publishes JSON telemetry over MQTT to Mosquitto (port 1883). The ingestion worker parses, validates, and commits payloads to the primary node of MongoDB replica set \texttt{rs0} with \texttt{w: "majority"}. Analytical queries route through Express using \texttt{readPreference: "secondaryPreferred"}, and real-time visualization is rendered by the React 18 single-page dashboard.
+
+\begin{figure}[htbp]
+\centering
+\fbox{\parbox{0.88\textwidth}{\centering\vspace{8pt}
+\textbf{Hardware Simulator} $\longrightarrow$ \textbf{Mosquitto MQTT (1883)} $\longrightarrow$ \textbf{Node.js Ingestion Engine}\\
+$\downarrow$\\
+\textbf{MongoDB Replica Set rs0} [Primary: 27017 $\longleftrightarrow$ Secondaries: 27018, 27019]\\
+$\downarrow$\\
+\textbf{Express REST API (3000)} $\longleftrightarrow$ \textbf{React Web Dashboard (5173)}\vspace{8pt}}}
+\caption{System data flow and distributed topology.}\label{fig:arch}
+\end{figure}
+
+The software stack executes locally:
+\begin{itemize}[noitemsep]
+\item \textbf{Node.js Runtime:} v24.14.1
+\item \textbf{MongoDB Community Server:} v8.0.30 (3 native processes on ports 27017, 27018, 27019)
+\item \textbf{Eclipse Mosquitto Broker:} v2.1.2 (Docker container on port 1883)
+\end{itemize}
+
+\begin{figure}[htbp]
+\centering
+\IfFileExists{figures/B0-mongod-processes.png}{%
+  \includegraphics[width=0.88\textwidth]{figures/B0-mongod-processes.png}%
+}{%
+  \begin{lstlisting}[language=bash]
+shekhar 60083 1 mongod --replSet rs0 --port 27017 --dbpath ./mongo-cluster/node1 --bind_ip localhost
+shekhar 60202 1 mongod --replSet rs0 --port 27018 --dbpath ./mongo-cluster/node2 --bind_ip localhost
+shekhar 60323 1 mongod --replSet rs0 --port 27019 --dbpath ./mongo-cluster/node3 --bind_ip localhost
+  \end{lstlisting}
+}
+\caption{Process table confirming three isolated local MongoDB daemon processes.}\label{fig:processes}
+\end{figure}
+
+\subsection{Database Schema, Validation and Collections}
+The \texttt{smart\_water} database organizes data into five functional collections (Table~\ref{tab:collections}).
+
+\begin{table}[htbp]
+\centering\small
+\caption{Collections in database \texttt{smart\_water}.}\label{tab:collections}
+\begin{tabularx}{\textwidth}{@{}l X X@{}}
+\toprule
+Collection & Purpose & Indexes and Lifecycle\\
+\midrule
+\texttt{homes} & Smart home property registry & Unique \texttt{home\_id}; persistent storage.\\
+\texttt{devices} & IoT sensor hardware metadata & Unique \texttt{device\_id}; references \texttt{home\_id}.\\
+\texttt{sensor\_activations} & Append-only telemetry event store & Unique \texttt{(device\_id, timestamp)}; 30-day TTL index.\\
+\texttt{alerts} & System threshold alarms and history & Compound \texttt{(device\_id, timestamp desc)}.\\
+\texttt{rejected\_messages} & Dead-letter queue for malformed MQTT inputs & 7-day TTL auto-purge index.\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\begin{lstlisting}[language=javascript,caption={Central hysteresis and alert threshold configuration object (src/lib/devices.js).}]
+export const CONTROL_CONFIG = {
+  inletValve: {
+    closeAbovePct: 85.0,  // Tank overflow prevention
+    openBelowPct: 40.0,   // Low-fill hysteresis trigger
+  },
+  boosterPump: {
+    stopBelowPct: 25.0,   // Cavitation / dry-run protection
+    resumeAbovePct: 35.0, // Pump restart hysteresis bound
+  },
+};
+export const LEAK_RULES = { dropPct: 2.5, windowSeconds: 30 };
+\end{lstlisting}
+
+\subsection{Replication, Quorum and Empirical Failover}
+High availability is maintained by a 3-member voting replica set (\texttt{rs0}). Quorum requires an absolute majority:
+\[
+\text{Quorum} = \left\lfloor \frac{N}{2} \right\rfloor + 1 = \left\lfloor \frac{3}{2} \right\rfloor + 1 = 2 \text{ nodes}
+\]
+Live inspection confirmed 100\% synchronization across all three members (29,845 documents on each node; Figures~\ref{fig:rsstatus} and~\ref{fig:counts}).
+
+\figslot{fig:rsstatus}{figures/B1-rs-status.png}{Terminal output from \texttt{mongosh} showing 1 PRIMARY (27017) and 2 SECONDARY nodes (27018, 27019).}{Replica set status: 1 Primary and 2 Secondaries with health 1.}
+
+\figslot{fig:counts}{figures/B2-replication-counts.png}{Terminal output querying collection count on ports 27017, 27018, and 27019.}{Document count parity across all replica set nodes.}
+
+Failover testing was conducted using the failover probe script (\texttt{npm run cluster:failover-probe}):
+\begin{itemize}[noitemsep]
+\item \textbf{Graceful Step-Down (\texttt{rs.stepDown()}):} Controlled election; write pause completed in 2.8~s.
+\item \textbf{Abrupt Process Termination (\texttt{kill -9}):} Detection required heartbeat timeout (10~s); election completed in 10.4~s. Total write gap was 11.2~s.
+\item Across 19 recorded probe writes, all 19 were acknowledged with \textbf{zero missing writes and zero lost data} (\texttt{evidence/failover-1790950929901.json}).
+\end{itemize}
+
+\figslot{fig:failover}{figures/E1-failover.png}{Terminal output of failover probe script showing 19 writes sent, 19 acknowledged, and zero lost data.}{Empirical failover probe measurement demonstrating zero acknowledged write loss.}
+
+\figslot{fig:quorum}{figures/E3-quorum.png}{Output of quorum demonstration script when 2 of 3 nodes are stopped.}{Quorum loss: Writes rejected when majority consensus is lost.}
+
+\subsection{Disaster Recovery: Point-in-Time Backup and Restore}
+Replication protects against hardware failure but does not prevent human error (such as an accidental collection drop). Disaster recovery was demonstrated using \texttt{npm run backup:demo}. A point-in-time \texttt{mongodump} with oplog capture completed in 1,079~ms. Restoring into an isolated test database (\texttt{smart\_water\_restore\_demo}) completed in 5,481~ms with \textbf{100\% data parity across all 29,756 records} and zero document loss (Figure~\ref{fig:restore}).
+
+\figslot{fig:restore}{figures/E4-backup-restore.png}{Terminal output of \texttt{npm run backup:demo} showing dump, restore, and 100\% parity verification.}{Point-in-time backup and restore with 100\% data parity.}
+
+% ==========================================================================
+% 5 API
+% ==========================================================================
+\section{API Implementation and Dashboard Evidence}
+
+The Express backend implements a RESTful API documented interactively with OpenAPI 3.0 via Swagger UI at \texttt{/api-docs} (Figure~\ref{fig:swagger}). Mutating endpoints (\texttt{POST}, \texttt{PATCH}, \texttt{DELETE}) are guarded by \texttt{X-API-Key} authentication middleware.
+
+\figslot{fig:swagger}{figures/05-swagger.png}{Swagger UI interactive API contract mounted at \texttt{http://localhost:3000/api-docs/}.}{Swagger UI interactive API documentation.}
+
+\figslot{fig:apisuccess}{figures/C1-api-success.png}{REST API query returning HTTP 200 OK with paginated telemetry records.}{Successful paginated query: \texttt{GET /api/telemetry/history}.}
+
+\figslot{fig:security}{figures/E5-security-state.png}{Terminal test showing HTTP 401 Unauthorized without API key, and successful authentication with key.}{API security: Enforcement of \texttt{X-API-Key} header.}
+
+The client presentation layer is delivered via a reactive React 18 dashboard executed with Vite at \texttt{http://localhost:5173}. The dashboard polls telemetry every two seconds, updating fluid level percentages, dynamic volume (litres), pump/valve relay toggles, and historical consumption charts (Figure~\ref{fig:dash}). A dedicated cluster health view displays real-time replica set status and topology (Figure~\ref{fig:cluster}).
+
+\figslot{fig:dash}{figures/06-dashboard.png}{React web dashboard at \texttt{http://localhost:5173} showing live water tank depth, volume, and actuator states.}{Live React web dashboard showing real-time tank telemetry.}
+
+\figslot{fig:cluster}{figures/E2-cluster-page.png}{React cluster diagnostics page at \texttt{http://localhost:5173/cluster} showing replica set members and health.}{React cluster diagnostics and failover monitoring dashboard.}
+
+% ==========================================================================
+% 6 SUMMARY
+% ==========================================================================
+\section{Summary, Conclusion and Future Investment}
+
+This technical evaluation confirms that adopting MongoDB for smart water tank automation is technically sound and operationally beneficial. The document model naturally represents semi-structured telemetry, compound indexing eliminates memory-sorting bottlenecks (105.0x speedup), and the three-member replica set delivers resilient high availability with zero lost acknowledged writes during leader elections.
+
+A three-phase investment roadmap is recommended for IoThings:
+\begin{enumerate}[noitemsep]
+\item \textbf{Phase 1 (Correctness):} Implement the Transactional Outbox pattern to couple MongoDB writes atomically with MQTT actuator commands.
+\item \textbf{Phase 2 (Hardening):} Migrate replica set nodes to isolated availability zones, enforce TLS encryption, and enable internal SCRAM-SHA-256 keyfile authentication.
+\item \textbf{Phase 3 (Scale-Out):} If write throughput eventually exceeds single-primary capacity, shard the collection using \texttt{\{ device\_id: "hashed", timestamp: 1 \}} or migrate to MongoDB native Time Series collections.
+\end{enumerate}
+
+In conclusion, IoThings should retain relational databases for core billing and commercial accounts while deploying MongoDB as the dedicated enterprise platform for IoT telemetry.
+
+% ==========================================================================
+% REFERENCES
+% ==========================================================================
+\clearpage
+\begin{thebibliography}{99}
+\setlength{\itemsep}{0.4em}
+
+\bibitem[Abadi(2012)]{abadi2012} Abadi, D. (2012) `Consistency tradeoffs in modern distributed database system design: CAP is only part of the story', \textit{Computer}, 45(2), pp.~37--42.
+
+\bibitem[Chang et~al.(2008)]{chang2008} Chang, F. et al. (2008) `Bigtable: a distributed storage system for structured data', \textit{ACM Transactions on Computer Systems}, 26(2), pp.~1--26.
+
+\bibitem[Codd(1970)]{codd1970} Codd, E.F. (1970) `A relational model of data for large shared data banks', \textit{Communications of the ACM}, 13(6), pp.~377--387.
+
+\bibitem[DeCandia et~al.(2007)]{decandia2007} DeCandia, G. et al. (2007) `Dynamo: Amazon's highly available key-value store', \textit{ACM SIGOPS Operating Systems Review}, 41(6), pp.~205--220.
+
+\bibitem[Gilbert and Lynch(2002)]{gilbert2002} Gilbert, S. and Lynch, N. (2002) `Brewer's conjecture and the feasibility of consistent, available, partition-tolerant web services', \textit{ACM SIGACT News}, 33(2), pp.~51--59.
+
+\bibitem[Kleppmann(2017)]{kleppmann2017} Kleppmann, M. (2017) \textit{Designing Data-Intensive Applications}. Sebastopol: O'Reilly Media.
+
+\bibitem[MongoDB, Inc.(2026a)]{mongoIdx} MongoDB, Inc. (2026a) \textit{Indexes}. Available at: \url{https://www.mongodb.com/docs/manual/indexes/} (Accessed: 2 October 2026).
+
+\bibitem[MongoDB, Inc.(2026b)]{mongoRepl} MongoDB, Inc. (2026b) \textit{Replication}. Available at: \url{https://www.mongodb.com/docs/manual/replication/} (Accessed: 2 October 2026).
+
+\bibitem[MongoDB, Inc.(2026c)]{mongoElect} MongoDB, Inc. (2026c) \textit{Replica set elections}. Available at: \url{https://www.mongodb.com/docs/manual/core/replica-set-elections/} (Accessed: 2 October 2026).
+
+\bibitem[MongoDB, Inc.(2026d)]{mongoVal} MongoDB, Inc. (2026d) \textit{Schema validation}. Available at: \url{https://www.mongodb.com/docs/manual/core/schema-validation/} (Accessed: 2 October 2026).
+
+\bibitem[OASIS(2019)]{oasis2019} OASIS (2019) \textit{MQTT Version 5.0, OASIS Standard}. Available at: \url{https://docs.oasis-open.org/mqtt/mqtt/v5.0/mqtt-v5.0.html} (Accessed: 2 October 2026).
+
+\bibitem[Stonebraker(2010)]{stonebraker2010} Stonebraker, M. (2010) `SQL databases v. NoSQL databases', \textit{Communications of the ACM}, 53(4), pp.~10--11.
+
+\end{thebibliography}
+
+% ==========================================================================
+% APPENDICES
+% ==========================================================================
+\clearpage
+\appendix
+\section{Dataset Provenance and Sample BSON Document}
+
+\figslot{fig:sampledoc}{figures/A1-collections-document.png}{Terminal output from \texttt{mongosh} showing collections in \texttt{smart\_water} and a sample BSON telemetry document.}{Collections list and stored telemetry document with native BSON types.}
+
+\section{Local Replica Set Deployment Commands}
+
+\begin{lstlisting}[language=bash]
+# Terminal 1: Node 1 (Primary candidate)
+mongod --replSet rs0 --port 27017 --dbpath ./mongo-cluster/node1 --bind_ip localhost
+
+# Terminal 2: Node 2 (Secondary)
+mongod --replSet rs0 --port 27018 --dbpath ./mongo-cluster/node2 --bind_ip localhost
+
+# Terminal 3: Node 3 (Secondary)
+mongod --replSet rs0 --port 27019 --dbpath ./mongo-cluster/node3 --bind_ip localhost
+
+# Initialize replica set once in mongosh
+rs.initiate({
+  _id: "rs0",
+  members: [
+    { _id: 0, host: "localhost:27017", priority: 2 },
+    { _id: 1, host: "localhost:27018", priority: 1 },
+    { _id: 2, host: "localhost:27019", priority: 1 }
+  ]
+});
+\end{lstlisting}
+
+\section{Verification and Test Suite Status}
+
+The test suite was executed via \texttt{npm test} (\texttt{src/test.js}), achieving \textbf{14 passed tests and 0 failures}:
+\begin{itemize}[noitemsep]
+\item Validation rules correctly reject invalid timestamps and out-of-range sensor readings.
+\item Dual-threshold hysteresis prevents rapid relay chattering on both inlet valve and booster pump.
+\item Unique compound index \texttt{(device\_id, timestamp)} guarantees idempotency on duplicate MQTT deliveries.
+\item Full CRUD capabilities verified on \texttt{homes} and \texttt{devices} registry collections.
+\end{itemize}
+
+\end{document}

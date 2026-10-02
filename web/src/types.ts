@@ -75,3 +75,72 @@ export interface AverageRow {
 }
 
 export const ALERT_REASONS: AlertReason[] = ['TANK_OVERFLOW', 'TANK_DRY_RUN'];
+
+export interface WaterInsights {
+  device_id: string;
+  tank_capacity_litres: number;
+  current_level_pct: number;
+  current_volume_litres: number;
+  consumption: {
+    today_litres: number;
+    is_today_estimated: boolean;
+    yesterday_litres: number;
+    daily_average_litres: number;
+    monthly_litres: number;
+    previous_month_litres: number;
+  };
+  prediction: {
+    status: 'draining' | 'stable_or_filling' | 'stable' | 'critical_reached' | 'insufficient_data';
+    current_level_pct?: number;
+    critical_level_pct?: number;
+    available_litres?: number;
+    drain_rate_lph?: number;
+    hours_to_critical?: number | null;
+    display: string;
+    message?: string;
+    recommendation?: string;
+  };
+  latest_alert: {
+    _id: string;
+    alert_type: string;
+    severity: 'info' | 'warning' | 'critical';
+    message: string;
+    estimated_excess_loss_litres?: number;
+    recommendation?: string;
+    status: 'unread' | 'acknowledged' | 'resolved';
+    timestamp: string;
+  } | null;
+  generated_at: string;
+}
+
+export interface DailyConsumptionPoint {
+  date: string;
+  litres: number;
+  refills?: number;
+}
+
+export interface SmartAlert {
+  _id: string;
+  device_id: string;
+  alert_type: string;
+  severity: 'info' | 'warning' | 'critical';
+  message: string;
+  measured_drop_pct?: number;
+  estimated_excess_loss_litres?: number;
+  detection_period?: string;
+  recommendation?: string;
+  status: 'unread' | 'acknowledged' | 'resolved';
+  timestamp: string;
+}
+
+export interface HomeRecord {
+  _id?: string;
+  home_id: string;
+  owner: string;
+  address: string;
+  city: string;
+  postcode?: string;
+  country: string;
+  water_tariff?: string;
+}
+

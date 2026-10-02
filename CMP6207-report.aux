@@ -1,0 +1,116 @@
+\relax 
+\providecommand\hyper@newdestlabel[2]{}
+\providecommand\HyField@AuxAddToFields[1]{}
+\providecommand\HyField@AuxAddToCoFields[2]{}
+\citation{cattell2011,sadalage2012}
+\@writefile{toc}{\contentsline {section}{\numberline {1}Introduction}{3}{section.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {2}Principal NoSQL Types and Theoretical Basis}{3}{section.2}\protected@file@percent }
+\citation{decandia2007}
+\citation{mongoVal}
+\citation{chang2008}
+\citation{lakshman2010,oneil1996}
+\@writefile{lot}{\contentsline {table}{\numberline {1}{\ignorespaces Principal NoSQL families and evaluation for smart tank telemetry.}}{4}{table.caption.1}\protected@file@percent }
+\providecommand*\caption@xref[2]{\@setref\relax\@undefined{#1}}
+\newlabel{tab:families}{{1}{4}{Principal NoSQL families and evaluation for smart tank telemetry}{table.caption.1}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.1}Key--Value Stores}{4}{subsection.2.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.2}Document Stores}{4}{subsection.2.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.3}Wide-Column Stores}{4}{subsection.2.3}\protected@file@percent }
+\citation{robinson2015}
+\citation{mongoWT,kleppmann2017}
+\citation{gilbert2002,brewer2012}
+\citation{abadi2012}
+\citation{mongoWC}
+\citation{codd1970}
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.4}Graph Stores}{5}{subsection.2.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.5}Theoretical Tradeoffs: CAP, PACELC, and Storage Engines}{5}{subsection.2.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {3}Critical Comparison: Relational and Document Databases}{5}{section.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.1}Schema Evolution and Relational Normalization}{5}{subsection.3.1}\protected@file@percent }
+\citation{stonebraker2010}
+\citation{mongoIdx}
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces Schema evolution: Heterogeneous firmware payloads coexisting in one collection.}}{6}{figure.caption.2}\protected@file@percent }
+\newlabel{fig:schema}{{1}{6}{Schema evolution: Heterogeneous firmware payloads coexisting in one collection}{figure.caption.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.2}Query Performance and Indexing Efficiency}{6}{subsection.3.2}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {2}{\ignorespaces Empirical query plan benchmark on 30,985 records (Measured: \texttt  {evidence/benchmark-30985.txt}).}}{6}{table.caption.3}\protected@file@percent }
+\newlabel{tab:bench}{{2}{6}{Empirical query plan benchmark on 30,985 records (Measured: \texttt {evidence/benchmark-30985.txt})}{table.caption.3}{}}
+\citation{mongoTx}
+\citation{oasis2019}
+\citation{mongoRP}
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces Active B-Tree indexes inspected in MongoDB Compass.}}{7}{figure.caption.4}\protected@file@percent }
+\newlabel{fig:compassindexes}{{2}{7}{Active B-Tree indexes inspected in MongoDB Compass}{figure.caption.4}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.3}ACID Guarantees and Idempotent Messaging}{7}{subsection.3.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {4}IoThings Database Design and Implementation}{7}{section.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.1}Architecture and Local Deployment}{7}{subsection.4.1}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces System data flow and distributed topology.}}{8}{figure.caption.5}\protected@file@percent }
+\newlabel{fig:arch}{{3}{8}{System data flow and distributed topology}{figure.caption.5}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces Process table confirming three isolated local MongoDB daemon processes.}}{8}{figure.caption.6}\protected@file@percent }
+\newlabel{fig:processes}{{4}{8}{Process table confirming three isolated local MongoDB daemon processes}{figure.caption.6}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.2}Database Schema, Validation and Collections}{8}{subsection.4.2}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {3}{\ignorespaces Collections in database \texttt  {smart\_water}.}}{8}{table.caption.7}\protected@file@percent }
+\newlabel{tab:collections}{{3}{8}{Collections in database \texttt {smart\_water}}{table.caption.7}{}}
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {1}{\ignorespaces Central hysteresis and alert threshold configuration object (src/lib/devices.js).}}{8}{lstlisting.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.3}Replication, Quorum and Empirical Failover}{9}{subsection.4.3}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {5}{\ignorespaces Replica set status: 1 Primary and 2 Secondaries with health 1.}}{9}{figure.caption.8}\protected@file@percent }
+\newlabel{fig:rsstatus}{{5}{9}{Replica set status: 1 Primary and 2 Secondaries with health 1}{figure.caption.8}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {6}{\ignorespaces Document count parity across all replica set nodes.}}{9}{figure.caption.9}\protected@file@percent }
+\newlabel{fig:counts}{{6}{9}{Document count parity across all replica set nodes}{figure.caption.9}{}}
+\citation{mongoElect}
+\citation{mongoDump}
+\@writefile{lof}{\contentsline {figure}{\numberline {7}{\ignorespaces Empirical failover probe measurement demonstrating zero acknowledged write loss.}}{10}{figure.caption.10}\protected@file@percent }
+\newlabel{fig:failover}{{7}{10}{Empirical failover probe measurement demonstrating zero acknowledged write loss}{figure.caption.10}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {8}{\ignorespaces Quorum loss: Writes rejected when majority consensus is lost.}}{10}{figure.caption.11}\protected@file@percent }
+\newlabel{fig:quorum}{{8}{10}{Quorum loss: Writes rejected when majority consensus is lost}{figure.caption.11}{}}
+\citation{openapi}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.4}Disaster Recovery: Point-in-Time Backup and Restore}{11}{subsection.4.4}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {9}{\ignorespaces Point-in-time backup and restore with 100\% data parity.}}{11}{figure.caption.12}\protected@file@percent }
+\newlabel{fig:restore}{{9}{11}{Point-in-time backup and restore with 100\% data parity}{figure.caption.12}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {5}API Implementation and Dashboard Evidence}{11}{section.5}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {10}{\ignorespaces Swagger UI interactive API documentation.}}{12}{figure.caption.13}\protected@file@percent }
+\newlabel{fig:swagger}{{10}{12}{Swagger UI interactive API documentation}{figure.caption.13}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {11}{\ignorespaces Successful paginated query: \texttt  {GET /api/telemetry/history}.}}{12}{figure.caption.14}\protected@file@percent }
+\newlabel{fig:apisuccess}{{11}{12}{Successful paginated query: \texttt {GET /api/telemetry/history}}{figure.caption.14}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {12}{\ignorespaces API security: Enforcement of \texttt  {X-API-Key} header.}}{13}{figure.caption.15}\protected@file@percent }
+\newlabel{fig:security}{{12}{13}{API security: Enforcement of \texttt {X-API-Key} header}{figure.caption.15}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {13}{\ignorespaces Live React web dashboard showing real-time tank telemetry.}}{13}{figure.caption.16}\protected@file@percent }
+\newlabel{fig:dash}{{13}{13}{Live React web dashboard showing real-time tank telemetry}{figure.caption.16}{}}
+\citation{mongoSec}
+\citation{mongoShard}
+\citation{mongoTS}
+\@writefile{lof}{\contentsline {figure}{\numberline {14}{\ignorespaces React cluster diagnostics and failover monitoring dashboard.}}{14}{figure.caption.17}\protected@file@percent }
+\newlabel{fig:cluster}{{14}{14}{React cluster diagnostics and failover monitoring dashboard}{figure.caption.17}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {6}Summary, Conclusion and Future Investment}{14}{section.6}\protected@file@percent }
+\bibcite{abadi2012}{{1}{2012}{{Abadi}}{{}}}
+\bibcite{brewer2012}{{2}{2012}{{Brewer}}{{}}}
+\bibcite{cattell2011}{{3}{2011}{{Cattell}}{{}}}
+\bibcite{chang2008}{{4}{2008}{{Chang et~al.}}{{}}}
+\bibcite{codd1970}{{5}{1970}{{Codd}}{{}}}
+\bibcite{decandia2007}{{6}{2007}{{DeCandia et~al.}}{{}}}
+\bibcite{gilbert2002}{{7}{2002}{{Gilbert and Lynch}}{{}}}
+\bibcite{icoStorage}{{8}{2026}{{Information Commissioner's Office}}{{}}}
+\bibcite{kleppmann2017}{{9}{2017}{{Kleppmann}}{{}}}
+\bibcite{lakshman2010}{{10}{2010}{{Lakshman and Malik}}{{}}}
+\bibcite{mongoIdx}{{11}{2026a}{{MongoDB, Inc.}}{{}}}
+\bibcite{mongoRepl}{{12}{2026b}{{MongoDB, Inc.}}{{}}}
+\bibcite{mongoElect}{{13}{2026c}{{MongoDB, Inc.}}{{}}}
+\bibcite{mongoVal}{{14}{2026d}{{MongoDB, Inc.}}{{}}}
+\bibcite{mongoWC}{{15}{2026e}{{MongoDB, Inc.}}{{}}}
+\bibcite{mongoTx}{{16}{2026f}{{MongoDB, Inc.}}{{}}}
+\bibcite{mongoShard}{{17}{2026g}{{MongoDB, Inc.}}{{}}}
+\bibcite{mongoDump}{{18}{2026h}{{MongoDB, Inc.}}{{}}}
+\bibcite{mongoSec}{{19}{2026i}{{MongoDB, Inc.}}{{}}}
+\bibcite{mongoTS}{{20}{2026j}{{MongoDB, Inc.}}{{}}}
+\bibcite{mongoWT}{{21}{2026k}{{MongoDB, Inc.}}{{}}}
+\bibcite{mongoTTL}{{22}{2026l}{{MongoDB, Inc.}}{{}}}
+\bibcite{mongoRP}{{23}{2026m}{{MongoDB, Inc.}}{{}}}
+\bibcite{oasis2019}{{24}{2019}{{OASIS}}{{}}}
+\bibcite{oneil1996}{{25}{1996}{{O'Neil et~al.}}{{}}}
+\bibcite{openapi}{{26}{2020}{{OpenAPI Initiative}}{{}}}
+\bibcite{pgJSON}{{27}{2026}{{PostgreSQL Global Development Group}}{{}}}
+\bibcite{robinson2015}{{28}{2015}{{Robinson et~al.}}{{}}}
+\bibcite{sadalage2012}{{29}{2012}{{Sadalage and Fowler}}{{}}}
+\bibcite{stonebraker2010}{{30}{2010}{{Stonebraker}}{{}}}
+\@writefile{toc}{\contentsline {section}{\numberline {A}Dataset Provenance and Sample BSON Document}{17}{appendix.A}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {15}{\ignorespaces MongoDB Compass document explorer showing real-time BSON data structure.}}{17}{figure.caption.18}\protected@file@percent }
+\newlabel{fig:sampledoc}{{15}{17}{MongoDB Compass document explorer showing real-time BSON data structure}{figure.caption.18}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {B}Local Replica Set Deployment Commands}{17}{appendix.B}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {C}Verification and Test Suite Status}{18}{appendix.C}\protected@file@percent }
+\gdef \@abspage@last{19}

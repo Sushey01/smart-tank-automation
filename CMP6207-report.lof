@@ -1,0 +1,15 @@
+\contentsline {figure}{\numberline {1}{\ignorespaces Schema evolution: Heterogeneous firmware payloads coexisting in one collection.}}{6}{figure.caption.2}%
+\contentsline {figure}{\numberline {2}{\ignorespaces Active B-Tree indexes inspected in MongoDB Compass.}}{7}{figure.caption.4}%
+\contentsline {figure}{\numberline {3}{\ignorespaces System data flow and distributed topology.}}{8}{figure.caption.5}%
+\contentsline {figure}{\numberline {4}{\ignorespaces Process table confirming three isolated local MongoDB daemon processes.}}{8}{figure.caption.6}%
+\contentsline {figure}{\numberline {5}{\ignorespaces Replica set status: 1 Primary and 2 Secondaries with health 1.}}{9}{figure.caption.8}%
+\contentsline {figure}{\numberline {6}{\ignorespaces Document count parity across all replica set nodes.}}{9}{figure.caption.9}%
+\contentsline {figure}{\numberline {7}{\ignorespaces Empirical failover probe measurement demonstrating zero acknowledged write loss.}}{10}{figure.caption.10}%
+\contentsline {figure}{\numberline {8}{\ignorespaces Quorum loss: Writes rejected when majority consensus is lost.}}{10}{figure.caption.11}%
+\contentsline {figure}{\numberline {9}{\ignorespaces Point-in-time backup and restore with 100\% data parity.}}{11}{figure.caption.12}%
+\contentsline {figure}{\numberline {10}{\ignorespaces Swagger UI interactive API documentation.}}{12}{figure.caption.13}%
+\contentsline {figure}{\numberline {11}{\ignorespaces Successful paginated query: \texttt {GET /api/telemetry/history}.}}{12}{figure.caption.14}%
+\contentsline {figure}{\numberline {12}{\ignorespaces API security: Enforcement of \texttt {X-API-Key} header.}}{13}{figure.caption.15}%
+\contentsline {figure}{\numberline {13}{\ignorespaces Live React web dashboard showing real-time tank telemetry.}}{13}{figure.caption.16}%
+\contentsline {figure}{\numberline {14}{\ignorespaces React cluster diagnostics and failover monitoring dashboard.}}{14}{figure.caption.17}%
+\contentsline {figure}{\numberline {15}{\ignorespaces MongoDB Compass document explorer showing real-time BSON data structure.}}{17}{figure.caption.18}%

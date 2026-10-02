@@ -486,6 +486,86 @@ const swaggerDocument = {
         },
       },
     },
+    '/api/analytics/consumption/today': {
+      get: {
+        tags: ['Analytics & Alerts'],
+        summary: "Get today's calculated water consumption",
+        description: 'Computes total litres consumed today by executing a MongoDB aggregation pipeline over non-refill volume drops.',
+        responses: {
+          200: { description: "Today's consumption retrieved" },
+        },
+      },
+    },
+    '/api/analytics/consumption/daily': {
+      get: {
+        tags: ['Analytics & Alerts'],
+        summary: 'Get daily water consumption history',
+        description: 'Uses $setWindowFields and $dateTrunc to aggregate daily consumption and refill cycles across secondary replica set nodes.',
+        responses: {
+          200: { description: 'Daily consumption series' },
+        },
+      },
+    },
+    '/api/analytics/consumption/monthly': {
+      get: {
+        tags: ['Analytics & Alerts'],
+        summary: 'Get monthly consumption comparison',
+        description: 'Aggregates monthly water usage comparing current month with previous month.',
+        responses: {
+          200: { description: 'Monthly consumption comparison' },
+        },
+      },
+    },
+    '/api/analytics/prediction': {
+      get: {
+        tags: ['Analytics & Alerts'],
+        summary: 'Depletion and water availability prediction',
+        description: 'Estimates remaining operational hours until the tank reaches the 25% critical reserve threshold based on rolling drain rate.',
+        responses: {
+          200: { description: 'Depletion prediction calculation' },
+        },
+      },
+    },
+    '/api/analytics/summary': {
+      get: {
+        tags: ['Analytics & Alerts'],
+        summary: 'Comprehensive Smart Water Insights summary',
+        description: 'Returns integrated consumption metrics, depletion prediction, tank levels, and active anomaly warnings.',
+        responses: {
+          200: { description: 'Smart Water Insights summary' },
+        },
+      },
+    },
+    '/api/alerts': {
+      get: {
+        tags: ['Analytics & Alerts'],
+        summary: 'List smart water notifications and anomaly alerts',
+        description: 'Queries the alerts collection with filtering for unread status, severity, and anomaly types.',
+        responses: {
+          200: { description: 'List of alerts' },
+        },
+      },
+    },
+    '/api/alerts/{id}/ack': {
+      patch: {
+        tags: ['Analytics & Alerts'],
+        summary: 'Acknowledge an alert notification',
+        description: 'Marks an active alert as acknowledged and records the acknowledgement timestamp.',
+        parameters: [
+          {
+            name: 'id',
+            in: 'path',
+            required: true,
+            schema: { type: 'string' },
+            description: 'The 24-character hexadecimal MongoDB ObjectId of the alert',
+          },
+        ],
+        responses: {
+          200: { description: 'Alert acknowledged successfully' },
+          404: { description: 'Alert not found' },
+        },
+      },
+    },
   },
 };
 

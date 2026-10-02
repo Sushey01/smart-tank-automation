@@ -36,6 +36,15 @@ const { ensureAllIndexes } = require('./lib/indexes');
 const { deriveInsight } = require('./lib/insights');
 const { notifyAlertTransition } = require('./lib/telegram');
 const { setupSwagger } = require('./lib/swagger');
+const WATER_CONFIG = require('./lib/water-config');
+const {
+  getTodayConsumption,
+  getDailyConsumption,
+  getMonthlyConsumption,
+  predictDepletion,
+  evaluateAbnormalOvernightUsage,
+  getAnalyticsSummary,
+} = require('./lib/analytics');
 
 const client = new MongoClient(MONGO_URI, {
   retryWrites: true,
@@ -481,6 +490,83 @@ app.get('/api/telemetry/summary', (req, res) => route(res, async () => {
   });
 }));
 
+// Water Management Analytics Endpoints
+app.get('/api/analytics/consumption/today', (req, res) => route(res, async () => {
+  const deviceId = req.query.device_id || HOME_HUB.device_id;
+  const result = await getTodayConsumption(client.db(DB_NAME), deviceId);
+  res.json({ device_id: deviceId, ...result });
+}));
+
+app.get('/api/analytics/consumption/daily', (req, res) => route(res, async () => {
+  const deviceId = req.query.device_id || HOME_HUB.device_id;
+  const days = req.query.days ? parseInt(req.query.days, 10) : 14;
+  const result = await getDailyConsumption(client.db(DB_NAME), deviceId, days);
+  res.json({ device_id: deviceId, days, series: result });
+}));
+
+app.get('/api/analytics/consumption/monthly', (req, res) => route(res, async () => {
+  const deviceId = req.query.device_id || HOME_HUB.device_id;
+  const result = await getMonthlyConsumption(client.db(DB_NAME), deviceId);
+  res.json({ device_id: deviceId, ...result });
+}));
+
+app.get('/api/analytics/prediction', (req, res) => route(res, async () => {
+  const deviceId = req.query.device_id || HOME_HUB.device_id;
+  const result = await predictDepletion(client.db(DB_NAME), deviceId);
+  res.json({ device_id: deviceId, ...result });
+}));
+
+app.get('/api/analytics/summary', (req, res) => route(res, async () => {
+  const deviceId = req.query.device_id || HOME_HUB.device_id;
+  const summary = await getAnalyticsSummary(client.db(DB_NAME), deviceId);
+  res.json(summary);
+}));
+
+// Smart Alerts Endpoints
+app.get('/api/alerts', (req, res) => route(res, async () => {
+  const { page, limit, skip } = pagination(req.query);
+  const filter = {};
+  if (req.query.device_id) filter.device_id = req.query.device_id;
+  if (req.query.status) filter.status = req.query.status;
+  if (req.query.severity) filter.severity = req.query.severity;
+  if (req.query.alert_type) filter.alert_type = req.query.alert_type;
+
+  const [total, items] = await Promise.all([
+    alertsCollection.countDocuments(filter),
+    alertsCollection.find(filter).sort({ timestamp: -1 }).skip(skip).limit(limit).toArray(),
+  ]);
+
+  res.json({
+    page,
+    limit,
+    total,
+    items: items.map((alert) => ({
+      ...alert,
+      _id: String(alert._id),
+      timestamp: alert.timestamp instanceof Date ? alert.timestamp.toISOString() : alert.timestamp,
+    })),
+  });
+}));
+
+app.patch('/api/alerts/:id/ack', (req, res) => route(res, async () => {
+  const _id = parseObjectId(req.params.id);
+  const result = await alertsCollection.findOneAndUpdate(
+    { _id },
+    { $set: { status: 'acknowledged', acknowledged_at: new Date() } },
+    { returnDocument: 'after' },
+  );
+  const doc = result && result.value !== undefined ? result.value : result;
+  if (!doc) throw httpError(404, 'Alert not found');
+  res.json({
+    success: true,
+    alert: {
+      ...doc,
+      _id: String(doc._id),
+      timestamp: doc.timestamp instanceof Date ? doc.timestamp.toISOString() : doc.timestamp,
+    },
+  });
+}));
+
 async function insertReading(doc) {
   const previous = await collection
     .find({ device_id: HOME_HUB.device_id })
@@ -495,15 +581,21 @@ async function insertReading(doc) {
     }
   }
   await collection.insertOne(doc, { writeConcern: { w: 'majority' } });
-  if (doc.alert && alertsCollection) {
-    alertsCollection.insertOne({
-      device_id: doc.device_id,
-      severity: doc.alert_reasons.some((r) => r.includes('OVERFLOW') || r.includes('LEAK')) ? 'critical' : 'warning',
-      reasons: doc.alert_reasons,
-      message: `Operational alert: ${doc.alert_reasons.join(', ')}`,
-      timestamp: doc.timestamp,
-      acknowledged: false,
-    }).catch(() => {});
+  if (alertsCollection) {
+    if (doc.alert) {
+      alertsCollection.insertOne({
+        device_id: doc.device_id,
+        alert_type: doc.alert_reasons[0] || 'ALERT',
+        severity: doc.alert_reasons.some((r) => r.includes('OVERFLOW') || r.includes('LEAK')) ? 'critical' : 'warning',
+        reasons: doc.alert_reasons,
+        message: `Operational alert: ${doc.alert_reasons.join(', ')}`,
+        timestamp: doc.timestamp,
+        status: 'unread',
+        acknowledged: false,
+      }).catch(() => {});
+    }
+    // Also evaluate overnight abnormal water usage
+    evaluateAbnormalOvernightUsage(client.db(DB_NAME), doc.device_id).catch(() => {});
   }
   try {
     await notifyAlertTransition(previous, doc);

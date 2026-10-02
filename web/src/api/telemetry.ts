@@ -49,3 +49,25 @@ export function updateReading(id: string, ultrasonicDepthPct: number) {
 export function deleteReading(id: string) {
   return apiSend<{ deleted: boolean; id: string }>(`/api/telemetry/${id}`, 'DELETE');
 }
+
+export function getWaterInsights(deviceId?: string) {
+  return apiGet<import('../types').WaterInsights>(`/api/analytics/summary${query({ device_id: deviceId })}`);
+}
+
+export function getDailyConsumptionSeries(days = 7, deviceId?: string) {
+  return apiGet<{ device_id: string; days: number; series: import('../types').DailyConsumptionPoint[] }>(
+    `/api/analytics/consumption/daily${query({ days, device_id: deviceId })}`
+  );
+}
+
+export function getHomes() {
+  return apiGet<{ count: number; homes: import('../types').HomeRecord[] }>('/api/homes');
+}
+
+export function getSmartAlerts(params: { status?: string; limit?: number }) {
+  return apiGet<PageResult<import('../types').SmartAlert>>(`/api/alerts${query(params)}`);
+}
+
+export function ackAlert(id: string) {
+  return apiSend<{ success: boolean; alert: import('../types').SmartAlert }>(`/api/alerts/${id}/ack`, 'PATCH', {});
+}

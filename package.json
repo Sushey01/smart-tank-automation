@@ -16,9 +16,11 @@
     "demo:schema": "node scripts/demo-schema.js",
     "evidence": "node scripts/generate-evidence.js",
     "measure:failover": "node scripts/measure-failover.js",
+    "cluster:failover-probe": "node scripts/measure-failover.js --duration 10",
     "quorum:demo": "node scripts/quorum-demo.js",
     "backup:demo": "node scripts/backup-demo.js",
     "crud:demo": "node scripts/crud-demo.js",
+    "demo:leak": "node scripts/demo-leak.js",
     "report:wordcount": "node scripts/count-report-words.js"
   },
   "dependencies": {
