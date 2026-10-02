@@ -1,825 +1,140 @@
-# CMP6207: Modern Data Stores — Coursework Assignment Report
+# IoThings Application Report: Smart Tank Telemetry and Control Data Store
 
 **Module:** CMP6207 Modern Data Stores  
-**Module Leader:** Konstantinos Vlachos  
-**Assessment:** Coursework Report (Weighting: 60%, Target Workload: 4,000 words, Level 6)  
-**Institution:** Birmingham City University  
-**Faculty:** Faculty of Computing, Engineering and the Built Environment  
-**Project Title:** Smart Tank Automation: A Distributed, Fault-Tolerant NoSQL Telemetry Platform for IoThings  
-**Student Name:** [Your Name]  
-**Student ID:** [Your Student ID]  
-**Submission Date:** May 2025  
+**Assessment:** CWRK Professional Implementation Report (Level 6 / 60%)  
+**Academic Year:** 2024–2025 / 2026  
+**Institution:** Birmingham City University, Faculty of Computing, Engineering and the Built Environment  
+**Student Name:** [Enter student name]  
+**Student ID:** [Enter student ID]  
+**Submission Month/Year:** [Enter actual submission month/year]  
+**Main Narrative Workload:** Approximately 4,000 words (Sections 1–6; see word-count record in Appendix F)  
+
+> **Review Notice:** Replace this cover page with, or prepend, the official University Coursework Declaration and Cover Sheet required by Birmingham City University. This draft was prepared with AI-assisted editing and technical structuring. In accordance with BCU Academic Integrity policies and the assessment brief's authorship regulations, the student must review, adapt, and verify all claims, declarations, and code observations prior to formal submission. Bracketed identity placeholders and pending screenshot boxes require attention before final export.
 
 ---
 
 ## Contents
 
-1. [Introduction](#1-introduction)
-2. [Types of NoSQL Databases and Selection of MongoDB](#2-types-of-nosql-databases-and-selection-of-mongodb)
-3. [Relational and NoSQL Database Comparison](#3-relational-and-nosql-database-comparison)
-4. [System Architecture and Cluster Topology](#4-system-architecture-and-cluster-topology)
-5. [NoSQL Database Design and Data Modeling](#5-nosql-database-design-and-data-modeling)
-6. [Implementation and Real-Time Data Flow](#6-implementation-and-real-time-data-flow)
-7. [High Availability, Quorum and Fault Tolerance](#7-high-availability-quorum-and-fault-tolerance)
-8. [Query Execution, Aggregation Pipeline and Benchmark Evaluation](#8-query-execution-aggregation-pipeline-and-benchmark-evaluation)
-9. [Critical Evaluation and Discussion](#9-critical-evaluation-and-discussion)
-10. [Security Hardening, Operations and UK GDPR Compliance](#10-security-hardening-operations-and-uk-gdpr-compliance)
-11. [Conclusion and Future Work](#11-conclusion-and-future-work)
-12. [References](#12-references)
-13. [Appendices](#13-appendices)
+* [1 Introduction](#1-introduction)
+* [2 Principal NoSQL Types and Their Theoretical Basis](#2-principal-nosql-types-and-their-theoretical-basis)
+  * [2.1 Key–Value Stores](#21-keyvalue-stores)
+  * [2.2 Document Stores](#22-document-stores)
+  * [2.3 Wide-Column Stores](#23-wide-column-stores)
+  * [2.4 Graph Stores](#24-graph-stores)
+  * [2.5 Consistency Theory and Selection](#25-consistency-theory-and-selection)
+* [3 Critical Comparison: Relational and Document Databases](#3-critical-comparison-relational-and-document-databases)
+  * [3.1 Schema, Relationships and Integrity](#31-schema-relationships-and-integrity)
+  * [3.2 Queries, Performance and Scalability](#32-queries-performance-and-scalability)
+  * [3.3 Transactions, Consistency and Delivery Guarantees](#33-transactions-consistency-and-delivery-guarantees)
+  * [3.4 Governance, Cost and Client Judgement](#34-governance-cost-and-client-judgement)
+* [4 Design, Implementation and Distributed Management](#4-design-implementation-and-distributed-management)
+  * [4.1 Architecture and Reproducible Setup](#41-architecture-and-reproducible-setup)
+  * [4.2 Dataset, Collection Boundaries and Validation](#42-dataset-collection-boundaries-and-validation)
+  * [4.3 MQTT Ingestion and Automation](#43-mqtt-ingestion-and-automation)
+  * [4.4 Indexes and Analytical Queries](#44-indexes-and-analytical-queries)
+  * [4.5 Replication, Failover and Recovery](#45-replication-failover-and-recovery)
+  * [4.6 Security and Operational Readiness](#46-security-and-operational-readiness)
+* [5 API Implementation and Dashboard Evidence](#5-api-implementation-and-dashboard-evidence)
+* [6 Summary, Conclusion and Future Investment](#6-summary-conclusion-and-future-investment)
+* [References](#references)
+* [Appendix A: Dataset Provenance and Reproducibility](#appendix-a-dataset-provenance-and-reproducibility)
+* [Appendix B: Local Installation and Replica-Set Capture](#appendix-b-local-installation-and-replica-set-capture)
+* [Appendix C: API Contract and Concrete Examples](#appendix-c-api-contract-and-concrete-examples)
+* [Appendix D: Verification, CRUD and Evidence Status](#appendix-d-verification-crud-and-evidence-status)
+* [Appendix E: Failover, Backup and Security Captures](#appendix-e-failover-backup-and-security-captures)
+* [Appendix F: Source Map, Word Count and Completion Checklist](#appendix-f-source-map-word-count-and-completion-checklist)
 
 ---
 
-## 1. Introduction
+## List of Figures
 
-IoThings Home Automation Solutions is a United Kingdom-based small-to-medium enterprise (SME) specializing in smart residential environments and Internet of Things (IoT) technologies. To enhance household sustainability, resource efficiency, and occupant safety, IoThings installs an ecosystem of connected sensors and actuators across domestic properties. These devices measure utility consumption, environmental variables, and structural safety parameters—including intelligent door locks, motorized shutter systems, ambient climate monitors, electrical energy meters, and automated water management installations. Currently, IoThings manages its commercial operations using traditional relational database management systems (RDBMS), which power their Enterprise Resource Planning (ERP), Customer Relationship Management (CRM), billing, and logistics infrastructure.
-
-However, the continuous, high-frequency stream of telemetric events generated by smart home sensors poses a fundamental technological challenge to the existing relational architecture. To deliver predictive insights, automated safety interventions, and transparent feedback to customers regarding device utilization, IoThings requires a modern, distributed data management platform. In compliance with strict UK General Data Protection Regulation (UK GDPR) mandates, customer privacy must be rigorously preserved; real customer telemetry cannot be exposed or manipulated during research, prototyping, and benchmarking. Consequently, this engineering project designs, simulates, and implements a fault-tolerant, synthetic telemetry data store centered upon a critical domestic utility asset: an automated smart water storage and pumping installation identified as `HOME_HUB_01`.
-
-The core objective of this project is to implement an end-to-end data pipeline comprising:
-1. An edge simulation layer transmitting structured sensor telemetry via the lightweight MQ Telemetry Transport (MQTT) protocol at Quality of Service (QoS) level 1.
-2. A resilient Node.js ingestion engine that validates payloads, enforces data quality constraints, detects operational anomalies (such as overflow, dry-running, and pipe leaks), and persists readings into a distributed database.
-3. A three-node MongoDB replica set (`rs0`) engineered for high availability (HA), automatic failover, and zero acknowledged-write loss.
-4. A feature-rich Express REST API featuring OpenAPI/Swagger interactive documentation and full Create, Read, Update, and Delete (CRUD) capabilities across device registries and telemetry stores.
-5. A real-time React web dashboard providing responsive visualization, control mode toggling, and telemetry inspection.
-
-A critical engineering parameter demonstrated within this system is that high availability guarantees automatic failover with no acknowledged-write loss, accompanied by a deterministic, brief write pause during leader election (~10 to 12 seconds). This report critically evaluates the theoretical foundations of NoSQL data stores, documents the technical implementation of the distributed cluster, and delivers comprehensive operational evidence for IoThings.
-
----
-
-## 2. Types of NoSQL Databases and Selection of MongoDB
-
-### 2.1 Theoretical Foundations and Taxonomy of NoSQL Systems
-
-The emergence of NoSQL ("Not Only SQL") architectures represents a paradigm shift driven by the explosion of unstructured and semi-structured big data, real-time web applications, and distributed cloud computing (Sadalage and Fowler, 2012). Relational databases, governed by E.F. Codd’s relational algebra and Edgar’s normal forms, mandate rigid schemas and ACID (Atomicity, Consistency, Isolation, Durability) guarantees. In contrast, distributed NoSQL stores are designed to navigate the constraints of Eric Brewer’s **CAP Theorem**, which mathematically proves that a distributed data system operating across a partitionable network ($P$) can simultaneously guarantee at most two out of three properties: Consistency ($C$) or Availability ($A$) (Gilbert and Lynch, 2002; Brewer, 2012).
-
-Furthermore, Daniel Abadi expanded this concept via the **PACELC Theorem**: in the case of Network **P**artitioning, a system must choose between **A**vailability and **C**onsistency; **E**lse (under normal execution), the trade-off is between **L**atency and **C**onsistency (Abadi, 2012). While relational systems prioritize strict linearizability at the cost of availability during network splits, NoSQL architectures frequently adopt the **BASE** model (**B**asically **A**vailable, **S**oft state, **E**ventual consistency), enabling horizontal scalability across commodity clusters.
-
-NoSQL databases are fundamentally categorized into four primary architectural families:
-
-```mermaid
-flowchart TD
-    NoSQL["NoSQL Database Families"]
-    KV["1. Key-Value Stores<br/>(e.g., Redis, DynamoDB)"]
-    DOC["2. Document Stores<br/>(e.g., MongoDB, Couchbase)"]
-    COL["3. Wide-Column Stores<br/>(e.g., Apache Cassandra, ScyllaDB)"]
-    GRP["4. Graph Databases<br/>(e.g., Neo4j, Amazon Neptune)"]
-    NoSQL --> KV
-    NoSQL --> DOC
-    NoSQL --> COL
-    NoSQL --> GRP
-```
-
-#### 1. Key-Value Stores (e.g., Redis, Amazon DynamoDB)
-* **Definition:** Data is organized as an opaque, schema-less blob associated with an indexed, unique cryptographic or alphanumeric key.
-* **Theoretical Foundation & CAP:** Key-value systems typically utilize distributed hash tables (DHTs) based on consistent hashing rings (DeCandia et al., 2007). Depending on configuration, they operate as AP (e.g., Riak) or CP (e.g., Redis cluster).
-* **Benefits:** Sub-millisecond lookup latency ($O(1)$ algorithmic complexity) and extreme read/write throughput.
-* **Drawbacks:** Inability to perform intra-payload querying, field-level filtering, or multi-field aggregations without retrieving the entire value.
-
-#### 2. Document Stores (e.g., MongoDB, Couchbase)
-* **Definition:** Data is persisted in semi-structured, self-describing documents encoded in JSON, BSON (Binary JSON), or XML formats. Documents in a single collection can have heterogeneous fields (polymorphism).
-* **Theoretical Foundation & CAP:** In MongoDB replica sets, the system acts primarily as a CP store under network partitions when configured with `w: "majority"`, ensuring strong linearizable consistency for acknowledged writes, while allowing configurable eventual consistency for secondary reads (Chodorow, 2013).
-* **Benefits:** Expressive, schema-flexible modeling; deep nested object and array indexing; native aggregation pipelines; atomic in-place updates.
-* **Drawbacks:** Increased disk and memory footprint due to field name repetition in BSON encoding; multi-document transactions incur performance penalties compared to single-document atomicity.
-
-#### 3. Wide-Column Stores (e.g., Apache Cassandra, ScyllaDB)
-* **Definition:** Data is organized into tables consisting of rows and dynamic columns grouped into column families, indexed by row key, column key, and timestamp.
-* **Theoretical Foundation & CAP:** Cassandra follows the AP model using peer-to-peer ring architectures, tunable consistency levels ($R + W > N$ for quorum), and log-structured merge-tree (LSM) storage engines (Kleppmann, 2017).
-* **Benefits:** High sequential write throughput; linear horizontal scalability across thousands of nodes without a single point of failure.
-* **Drawbacks:** Complex query modeling; lacks flexible ad-hoc secondary indexing; absence of relational joins or flexible subdocument aggregations.
-
-#### 4. Graph Databases (e.g., Neo4j, Amazon Neptune)
-* **Definition:** Data is modeled explicitly as nodes (entities), edges (relationships), and properties, employing index-free adjacency.
-* **Theoretical Foundation & CAP:** Primarily optimized for highly connected domain topologies, generally adhering to ACID principles on single-instance or master-replica deployments.
-* **Benefits:** Traversal of complex, multi-hop relationship paths in constant time relative to the traversed subgraph rather than overall dataset size.
-* **Drawbacks:** High operational overhead for append-only, high-frequency linear time-series workloads.
-
-### 2.2 Critical Selection of MongoDB for IoThings
-
-To evaluate the four database paradigms for the IoThings smart tank automation platform, a multi-criteria decision matrix was constructed against six critical technical dimensions:
-
-| Architectural Requirement | Key-Value (Redis) | Wide-Column (Cassandra) | Graph (Neo4j) | Document (MongoDB) |
-|---|---|---|---|---|
-| **Hierarchical Payload Ingestion** | Poor (Opaque string/hash) | Moderate (Flattened columns) | Poor (Node/edge overhead) | **Optimal (Native JSON/BSON)** |
-| **Schema Evolution & Polymorphism** | Poor (No schema awareness) | Moderate (Altering column family) | Poor (Rigid graph metamodel) | **Optimal (Flexible document shapes)** |
-| **Complex Aggregations & Analytics**| Poor (Requires external compute) | Poor (Limited CQL GROUP BY) | Poor for time-series windows | **Optimal (Native Aggregation Pipeline)**|
-| **Write Latency & Secondary Indexing**| Optimal write, no rich index | Optimal write, weak indexing | Moderate write, heavy indexing | **Excellent (Rich B-Tree & Compound Indexes)**|
-| **High Availability & Failover** | Master-replica / Sentinel | Masterless peer-to-peer | Causal clustering | **Engineered Replica Set (`rs0`)** |
-| **TTL Automated Purging** | Key-level TTL supported | Column-level TTL supported | Not natively supported | **Collection Index TTL supported** |
-
-MongoDB was selected as the foundational data store for IoThings due to its native alignment with IoT sensor telemetry. Telemetry payloads emitted by `HOME_HUB_01` contain hierarchical nested structures—such as ultrasonic depth percentages, physical float switch booleans, and actuator states—which map directly to BSON documents without impedance mismatch. MongoDB’s native Aggregation Framework allows time-bucket rollups (minute/hour historical averages), while its compound B-Tree indexes provide logarithmic search performance for time-series queries.
+* **Figure 1:** Implemented multi-tier pipeline and distributed boundary `[Source-inspected: src/server.js, src/simulator.js]`
+* **Figure 2:** MongoDB Replica Set status terminal evidence slot `[Pending capture: 02-replica-status.png]`
+* **Figure 3:** Database collections and stored document BSON structure slot `[Pending capture: 03-collections-document.png]`
+* **Figure 4:** Query execution plan and compound index explain evidence slot `[Pending capture: 04-index-explain.png]`
+* **Figure 5:** Swagger UI interactive API contract overview `[Measured: report/images/05-swagger-overview.png]`
+* **Figure 6:** Interactive Swagger execution of GET `/api/health` slot `[Pending capture: 06-swagger-health.png]`
+* **Figure 7:** Interactive Swagger POST CRUD execution slot `[Pending capture: 07-swagger-crud.png]`
+* **Figure 8:** Running React web dashboard with live tank telemetry slot `[Pending capture: 08-web-dashboard.png]`
+* **Figure 9:** Cluster management and primary failover detection view slot `[Pending capture: 09-cluster-failover.png]`
+* **Figure 10:** Automated test suite execution terminal evidence slot `[Pending capture: 10-test-suite-pass.png]`
+* **Figure 11:** MQTT subscriber terminal with duplicate suppression slot `[Pending capture: 11-mqtt-ingestion.png]`
+* **Figure 12:** Continuous failover probe measurement output slot `[Pending capture: 12-failover-probe.png]`
+* **Figure 13:** Backup dump and isolated restore verification terminal slot `[Pending capture: 13-backup-restore.png]`
 
 ---
 
-## 3. Relational and NoSQL Database Comparison
+## List of Tables
 
-### 3.1 Structural Impedance Mismatch and Normalization Costs
-
-The primary motivation for IoThings transitioning from a relational database to MongoDB for IoT telemetry stems from the classical object-relational impedance mismatch (Sadalage and Fowler, 2012). Relational databases require data to be decomposed into first, second, and third normal forms (1NF, 2NF, 3NF). In relational theory, normalization minimizes update anomalies and eliminates redundancy. However, when applied to high-velocity sensor telemetry, normalization imposes severe computational penalties.
-
-In an RDBMS, persisting a single telemetric observation from `HOME_HUB_01` requires decomposing the nested JSON object into four normalized tables:
-
-```mermaid
-flowchart LR
-    subgraph RDBMS["Relational Normalized Tables (High Join Overhead)"]
-        T1["readings<br/>(id PK, device_id, timestamp)"]
-        T2["tank_depths<br/>(reading_id FK, depth_pct, litres, distance_cm)"]
-        T3["float_switches<br/>(reading_id FK, overflow_bool, dry_bool)"]
-        T4["actuator_states<br/>(reading_id FK, pump_cmd, valve_cmd)"]
-        T1 --- T2
-        T1 --- T3
-        T1 --- T4
-    end
-
-    subgraph MongoDB["MongoDB BSON Document (Single-Read Locality)"]
-        DOC["{<br/>&nbsp;&nbsp;device_id: 'HOME_HUB_01',<br/>&nbsp;&nbsp;timestamp: ISODate(...),<br/>&nbsp;&nbsp;telemetry: {<br/>&nbsp;&nbsp;&nbsp;&nbsp;water_tank: { depth_pct: 65, litres: 1300 },<br/>&nbsp;&nbsp;&nbsp;&nbsp;float_switches: { overflow: false, dry: false },<br/>&nbsp;&nbsp;&nbsp;&nbsp;actuator_states: { pump: 'ACTIVE', valve: 'CLOSED' }<br/>&nbsp;&nbsp;}<br/>}"]
-    end
-```
-
-In the relational model, inserting a single sensor reading requires four separate `INSERT` statements wrapped inside an explicit transaction. To guarantee referential integrity, foreign key constraints are evaluated, causing disk I/O synchronization across multiple table index trees. When querying the latest reading for real-time dashboard presentation or closed-loop control evaluation, the RDBMS must execute a multi-table `JOIN`:
-
-```sql
-SELECT r.id, r.timestamp, d.depth_pct, d.litres, f.overflow_bool, a.pump_cmd
-FROM readings r
-JOIN tank_depths d ON r.id = d.reading_id
-JOIN float_switches f ON r.id = f.reading_id
-JOIN actuator_states a ON r.id = a.reading_id
-WHERE r.device_id = 'HOME_HUB_01'
-ORDER BY r.timestamp DESC
-LIMIT 1;
-```
-
-As the dataset scales into millions of rows, multi-table joins exhaust relational buffer pool memory (such as the MySQL InnoDB buffer pool or PostgreSQL shared buffers). The database engine must execute nested-loop or hash join algorithms that traverse multiple separate B-Tree indexes, generating random disk read I/O (Stonebraker, 2010). 
-
-Conversely, MongoDB stores the complete reading as a single, contiguous BSON document. Data that is accessed together is stored together in a single memory block, maximizing CPU L1/L2 cache locality and eliminating join latency entirely. A query for the latest reading retrieves the entire nested object in a single sequential I/O operation.
-
-### 3.2 Schema Rigidity vs. Dynamic Polymorphism
-
-In a commercial IoT fleet, hardware sensors, microcontrollers, and edge firmwares evolve continuously. For example, IoThings devices deployed with firmware version `v2.4.1` measure basic water tank parameters (depth percentage, physical float switch contact states, and actuator relay commands). However, newly deployed smart tank installations running firmware `v2.5.0` incorporate supplementary water quality instrumentation, measuring Total Dissolved Solids (TDS in parts-per-million) and pH balance.
-
-In an RDBMS, incorporating these supplementary fields requires executing an `ALTER TABLE` Data Definition Language (DDL) migration:
-
-```sql
-ALTER TABLE tank_depths 
-ADD COLUMN tds_ppm NUMERIC(6,2) NULL, 
-ADD COLUMN ph NUMERIC(3,1) NULL;
-```
-
-In high-throughput enterprise databases holding millions of rows, executing `ALTER TABLE` presents severe operational risks:
-1. **Table Metadata Locking:** In relational engines, DDL operations require exclusive metadata locks (MDL). Concurrent telemetry ingestion threads are blocked from inserting incoming readings, causing upstream broker buffer queues to overflow and precipitating data loss.
-2. **Replication Lag Spikes:** When an `ALTER TABLE` statement is replicated across relational active-passive replicas, the secondary node must serialize the table rebuild, stalling replication streams and compromising failover readiness.
-3. **Sparse Data and Storage Inefficiency:** Legacy hardware running `v2.4.1` cannot produce TDS or pH telemetry. Consequently, millions of relational rows must persist `NULL` values, diluting table space, reducing index selectivity, and fragmenting disk blocks.
-
-In MongoDB, collections are inherently schema-flexible and support document polymorphism. A single collection (`smart_water.sensor_activations`) seamlessly stores documents with differing attributes without administrative schema migrations:
-* **Firmware v2.4.1 document shape:**
-  Contains standard `water_tank`, `float_switches`, and `actuator_states` subdocuments.
-* **Firmware v2.5.0 document shape:**
-  Natively embeds the additional `water_quality: { tds_ppm: 190, ph: 7.3 }` subdocument within the exact same collection.
-
-This architectural flexibility was empirically demonstrated within this project via `npm run demo:schema`. MongoDB inserted and queried both schema generations concurrently with zero downtime, zero table locking, and complete field-level queryability. Applications can inspect the `firmware` version field or use MongoDB's `$exists` query operator (`{ 'telemetry.water_quality': { $exists: true } }`) to process evolved documents conditionally.
-
-### 3.3 ACID vs. BASE Paradigms and Write Throughput
-
-Relational databases prioritize strict ACID guarantees across multi-table transactions. To ensure serializability or repeatable reads, relational engines utilize two-phase locking (2PL) and write-ahead logging (WAL). While essential for double-entry financial accounting, these synchronization primitives become severe bottlenecks under high-velocity IoT ingestion. Telemetry streams represent monotonic, append-only time-series data; individual readings are immutable once generated by the physical sensor.
-
-MongoDB reconciles data integrity and ingestion performance through single-document atomicity governed by the BASE model (Kleppmann, 2017). Because all attributes of a sensor activation are nested within a single document, any write, update, or replacement of that document is completely atomic without requiring multi-document locks. Furthermore, MongoDB allows developers to configure durability granularly through write concerns:
-* `w: 1`: Fast acknowledgment from the Primary node's in-memory storage engine.
-* `w: "majority"`: Durability guarantee confirming that the write has been replicated and committed to the journals of a majority of voting replica set members.
-
-By configuring `w: "majority"`, IoThings achieves mathematically provable durability against server hardware crashes without incurring the massive latency penalties of distributed relational transactions.
-
-### 3.4 Indexing Topologies and Storage Engine Mechanics
-
-The divergence between relational engines and MongoDB extends to their fundamental storage engine implementations and indexing mechanics. In traditional relational databases utilizing row-oriented storage engines (such as MySQL's InnoDB), table data is organized as an index-organized table (clustered index) ordered by the primary key. When secondary indexes are defined—such as an index on `(device_id, timestamp)`—the secondary index leaf pages store the primary key pointer rather than row pointers directly. Consequently, resolving a telemetry query that accesses non-indexed fields requires a two-step traversal: first scanning the secondary index B-Tree, followed by a secondary lookup into the clustered index B-Tree (commonly known as a bookmark lookup or row dereferencing). This secondary seek induces severe cache thrashing under high random read concurrency.
-
-In contrast, MongoDB's WiredTiger storage engine organizes documents in unclustered record stores where each document is assigned an internal 64-bit RecordID. Secondary B-Tree indexes point directly to the RecordID or can be structured as covering indexes. In a compound B-Tree index such as `{ device_id: 1, timestamp: -1 }`, WiredTiger colocates the equality search key (`device_id`) and the sort key (`timestamp`) in contiguous 4 KB leaf blocks. When evaluating range queries or fetching the most recent telemetry readings, the storage engine traverses the B-Tree in $O(\log N)$ steps, directly referencing the underlying document without secondary index dereferencing penalties. Furthermore, WiredTiger implements prefix compression on index keys, reducing RAM footprint by up to 50% compared to uncompressed relational B-Trees and allowing substantially larger working sets to reside in memory.
+* **Table 1:** Multi-criteria NoSQL paradigm evaluation for smart utility telemetry `[Source-inspected]`
+* **Table 2:** Application collection boundaries, schema responsibilities, and design trade-offs `[Source-inspected: src/lib/config.js, src/lib/indexes.js]`
+* **Table 3:** Fresh read-only query benchmark comparison on 30,985 documents `[Measured: evidence/benchmark-30985.txt, 2 October 2026]`
+* **Table 4:** Replica set member state, health, and optime synchronization `[Measured: evidence/rs-status-1790923572599.json, 2 October 2026]`
+* **Table 5:** Synthetic sensor inventory and calibration boundaries `[Source-inspected: src/lib/devices.js, src/seed.js]`
+* **Table 6:** REST endpoint catalogue and operational status codes `[Source-inspected: src/server.js, src/lib/swagger.js]`
+* **Table 7:** Empirical evidence provenance record `[Measured: evidence/, 2 October 2026]`
+* **Table 8:** Canonical source code implementation map `[Source-inspected]`
 
 ---
 
-## 4. System Architecture and Cluster Topology
+## 1 Introduction
 
-### 4.1 Distributed Pipeline Architecture
+IoThings Home Automation Solutions is a specialized technology provider deploying connected environmental instrumentation and automated controls across domestic properties in the United Kingdom. Its established commercial infrastructure relies upon relational database management systems that support transactional enterprise resource planning, customer relationship management, invoicing, and inventory logistics. While relational architectures satisfy transactional accounting requirements, the company’s expansion into continuous environmental monitoring introduces high-frequency telemetric data streams that strain tabular schemas. This report investigates a dedicated telemetry data store and automation backend centered upon an automated domestic utility installation: a smart domestic water storage and pumping apparatus identified as `HOME_HUB_01`.
 
-The IoThings smart tank automation platform is organized into a robust, multi-tier distributed pipeline spanning edge simulation, asynchronous message brokering, ingestion services, distributed clustered storage, and responsive presentation:
+The smart water tank installation is evaluated as an illustrative domestic automation subsystem within the scope of the CMP6207 coursework specification (Birmingham City University, 2024). Treating domestic fluid utility monitoring as the core IoT demonstrator represents an engineering assumption; explicit lecturer confirmation should be recorded before final grading. The demonstrator models an automated household water reservoir combining continuous ultrasonic depth tracking, mechanical high-level overflow and low-level dry-run float switches, closed-loop inlet solenoid valve regulation, booster pump protection, and algorithmic pipe-leak detection. The complete software path integrates an asynchronous physics simulator, an Eclipse Mosquitto message broker, a Node.js ingestion engine, a 3-member MongoDB replica set (`rs0`), an Express REST API with Swagger documentation, and a React web dashboard.
 
-```mermaid
-flowchart TD
-    subgraph Edge["Edge Layer (Simulation & Transport)"]
-        SIM["Telemetry Simulator<br/>(Continuous Physics Model)"]
-        MQTT["Mosquitto MQTT Broker<br/>Port 1883 | QoS 1"]
-        SIM -->|"iothings/home/telemetry"| MQTT
-    end
-
-    subgraph Service["Application & Ingestion Tier"]
-        INGEST["Node.js Ingestion Service<br/>(Persistent Client ID, Idempotency)"]
-        API["Express REST API & Swagger<br/>Port 3000 | Auth: X-API-Key"]
-        MQTT --> INGEST
-        INGEST --> API
-    end
-
-    subgraph Storage["Distributed Storage Tier (rs0)"]
-        direction LR
-        P["Primary Node<br/>127.0.0.1:27017<br/>(Writes + Reads)"]
-        S1["Secondary Node 1<br/>127.0.0.1:27018<br/>(Replication + Analytics)"]
-        S2["Secondary Node 2<br/>127.0.0.1:27019<br/>(Replication + Analytics)"]
-        P <-->|"Oplog Sync"| S1
-        P <-->|"Oplog Sync"| S2
-        S1 <-->|"Heartbeats"| S2
-    end
-
-    subgraph Presentation["Client Presentation Tier"]
-        WEB["React / Vite Dashboard<br/>Port 5173"]
-        SWAGGER["Swagger OpenAPI UI<br/>http://localhost:3000/api-docs"]
-        WEB <-->|"REST Queries & Control"| API
-        SWAGGER <-->|"Interactive Spec"| API
-    end
-
-    API -->|"Writes (w: majority)"| P
-    API -.->|"Analytics Reads (secondaryPreferred)"| S1
-    API -.->|"Analytics Reads (secondaryPreferred)"| S2
-```
-
-### 4.2 Verified Network Port and Repository Configuration
-
-The repository adheres strictly to deterministic configuration parameters and naming conventions. These values are centrally established across configuration files and runtime bindings:
-
-* **Database Name:** `smart_water` (configured in `src/lib/config.js`).
-* **Primary Collection Name:** `sensor_activations`.
-* **Companion Registry Collections:** `homes`, `devices`, `alerts`, `rejected_messages`, `failover_probe`.
-* **Monitored Device Identifier:** `HOME_HUB_01`.
-* **MQTT Telemetry Topic:** `iothings/home/telemetry`.
-* **Replica Set Name:** `rs0`.
-* **MongoDB Primary Port:** `27017`.
-* **MongoDB Secondary 1 Port:** `27018`.
-* **MongoDB Secondary 2 Port:** `27019`.
-* **Mosquitto MQTT Broker Port:** `1883` (containerized in Docker).
-* **Express REST API Server Port:** `3000`.
-* **Vite Web Frontend Port:** `5173`.
-
-### 4.3 MQTT Protocol Mechanics and Session Durability
-
-In industrial and domestic IoT installations, edge devices transmit telemetry over wireless cellular or Wi-Fi networks characterized by variable signal strength and transient packet loss. The platform utilizes Mosquitto MQTT v5/v3.1.1 running on port 1883.
-
-The ingestion subscriber (`src/server.js`) enforces durable message transport through three specific settings:
-1. **Persistent Client Identifier:** Connected using `clientId: 'smart-tank-ingestion-service'`.
-2. **Clean Session Disabled (`clean: false`):** Instructs the broker to maintain subscriber state across disconnections. When the ingestion process is paused or restarted, the Mosquitto broker buffers unacknowledged telemetry on disk.
-3. **Quality of Service Level 1 (`qos: 1`):** Guarantees that messages arrive at least once. Under QoS 1, the sender transmits a `PUBLISH` packet and awaits a corresponding `PUBACK` packet from the receiver. If an acknowledgment is not received within the timeout window, the message is re-transmitted with the Duplicate (`DUP`) flag set.
-
-Because QoS 1 guarantees "at least once" delivery, duplicate messages can arrive at the ingestion layer following network reconnects. The database layer is engineered with idempotent ingestion controls to absorb these duplicates seamlessly.
-
-### 4.4 Connection Pooling and Server Discovery and Monitoring (SDAM)
-
-Communication between the Node.js application tier and the distributed database tier is managed by the official MongoDB Node.js driver, which implements the **Server Discovery and Monitoring (SDAM)** specification (Chodorow, 2013). Rather than binding statically to a single host, the MongoClient initializes a dynamic topology listener seeded with the connection string:
-
-```
-mongodb://127.0.0.1:27017,127.0.0.1:27018,127.0.0.1:27019/smart_water?replicaSet=rs0
-```
-
-Upon startup, the driver establishes an internal connection pool to each discovered node. Every 10 seconds (governed by `heartbeatFrequencyMS`), background monitoring threads dispatch an `isMaster` or `hello` command to all three cluster members. This continuous polling allows the application tier to:
-1. Detect node status transitions (such as a Secondary transitioning to Primary or vice versa) in real time.
-2. Calculate moving average round-trip times (RTT) for each member to route read queries to the lowest-latency secondary when using `ReadPreference('secondaryPreferred')`.
-3. Handle socket-level disconnects by gracefully discarding broken connections from the pool and re-establishing TCP connections without throwing unhandled exceptions into Express route handlers.
-
-Furthermore, with `retryWrites: true` enabled in the client options, write operations that encounter transient network failures or election pauses are automatically buffered by the driver and retried against the newly elected Primary once topology discovery completes.
+To comply with United Kingdom General Data Protection Regulation (UK GDPR) mandates and protect residential confidentiality, all telemetry readings are synthetically generated. No real household records or unanonymized personal identities were captured. Every empirical number, log snippet, and benchmark result in this report is strictly governed by an explicit evidence convention: statements are labeled as `[Measured]` from a timestamped file in the `evidence/` directory, `[Source-inspected]` from repository source files, or `[Pending capture]` for screenshot slots awaiting final window grabs. The primary recommendation is a phased, evidence-led investment: IoThings should retain relational platforms for core enterprise transactions while introducing MongoDB strictly for the semi-structured IoT telemetry subsystem.
 
 ---
 
-## 5. NoSQL Database Design and Data Modeling
+## 2 Principal NoSQL Types and Theoretical Basis
 
-### 5.1 Hybrid Data Modeling: Embedding vs. Referencing
+[Section 2 outline pending critical analysis rewrite]
 
-A core architectural challenge in NoSQL data engineering is choosing between embedding subdocuments (denormalization) and referencing external documents across collections (normalization). In MongoDB, this decision is governed by data access patterns, document cardinality, and update velocity (Chodorow, 2013).
+## 3 Critical Comparison: Relational vs Document Paradigm
 
-The IoThings system implements a hybrid data architecture:
+[Section 3 outline pending critical analysis rewrite]
 
-```mermaid
-erDiagram
-    HOMES ||--o{ DEVICES : "owns / hosts"
-    HOMES {
-        string home_id PK
-        string owner
-        string address
-        string city
-        string postcode
-        string water_tariff
-        date created_at
-    }
-    DEVICES ||--o{ SENSOR_ACTIVATIONS : "emits telemetry"
-    DEVICES {
-        string device_id PK
-        string home_id FK
-        string device_type
-        string location
-        number tank_capacity_l
-        number sensor_height_cm
-        string firmware
-        string status
-        date installed_at
-    }
-    SENSOR_ACTIVATIONS {
-        ObjectId _id PK
-        string device_id FK
-        date timestamp
-        object telemetry
-        boolean alert
-        array alert_reasons
-        string source
-        date ingested_at
-    }
-    ALERTS {
-        ObjectId _id PK
-        string device_id FK
-        string severity
-        array reasons
-        string message
-        date timestamp
-        boolean acknowledged
-    }
-    REJECTED_MESSAGES {
-        ObjectId _id PK
-        string topic
-        string payload
-        string reason
-        date received_at
-    }
-    FAILOVER_PROBE {
-        ObjectId _id PK
-        string session_id
-        number seq
-        date timestamp
-        date created_at
-    }
-```
+## 4 System Architecture, Implementation and Distributed Management
 
-#### 1. Referencing Paradigm: Fleet Registries (`homes` and `devices`)
-Customer smart homes and IoT device hardware metadata exhibit **one-to-few** and **one-to-many** relationships with low update frequencies:
-* A home property (`home_id: 'H001'`) represents a physical building with owner details, street address, and water billing tariff.
-* An IoT device (`device_id: 'HOME_HUB_01'`) represents physical hardware installed in the rooftop loft with a defined tank capacity (2,000 litres) and sensor calibration height (200 cm).
+[Section 4 outline pending implementation detail]
 
-If device metadata and home addresses were embedded inside every telemetric reading, storing 100,000 readings would replicate the customer's full address and tank capacity 100,000 times. This would waste gigabytes of disk and RAM. Consequently, `homes` and `devices` are maintained as referenced master collections, indexed uniquely by `home_id` and `device_id`.
+## 5 API Implementation and Dashboard Evidence
 
-#### 2. Embedding Paradigm: Telemetry Snapshots (`sensor_activations`)
-Conversely, the physical telemetry variables generated by a device represent a synchronized snapshot of time. When the ultrasonic sensor measures depth, the physical float switches trip, and the actuator relays energize simultaneously.
+[Section 5 outline pending API contract and evidence]
 
-These variables are embedded directly within the `telemetry` subdocument:
-* `water_tank`: `{ ultrasonic_depth_pct: 68.4, volume_litres: 1368, distance_cm: 63 }`
-* `float_switches`: `{ high_level_overflow: false, low_level_dry_run: false }`
-* `actuator_states`: `{ inlet_valve: 'OPEN', booster_pump: 'ACTIVE' }`
-* `control_mode`: `'AUTO'`
+## 6 Summary, Conclusion and Future Investment
 
-Embedding these metrics guarantees atomic, single-document read and write locality. A single database query retrieves the complete operational state of the smart tank without secondary lookups or relational joins. Furthermore, because each reading document is approximately 500 bytes, it remains well below MongoDB's 16-megabyte BSON document limit.
+[Section 6 outline pending evaluation]
 
-### 5.2 Real Document Schema Extracted from Live Cluster
+## References
 
-Below is an authentic sample document extracted directly from `smart_water.sensor_activations` on the active replica set:
-
-```json
-{
-  "_id": "673f4e1b8a9c2d0012e4f5a1",
-  "device_id": "HOME_HUB_01",
-  "device_type": "water_tank",
-  "firmware": "v2.4.1",
-  "timestamp": "2026-10-02T06:45:00.000Z",
-  "telemetry": {
-    "water_tank": {
-      "ultrasonic_depth_pct": 68.4,
-      "volume_litres": 1368,
-      "distance_cm": 63
-    },
-    "float_switches": {
-      "high_level_overflow": false,
-      "low_level_dry_run": false
-    },
-    "actuator_states": {
-      "inlet_valve": "OPEN",
-      "booster_pump": "ACTIVE"
-    },
-    "control_mode": "AUTO"
-  },
-  "alert": false,
-  "alert_reasons": [],
-  "source": "mqtt",
-  "ingested_at": "2026-10-02T06:45:00.120Z"
-}
-```
-
-### 5.3 Complete Index Specifications and Storage Lifecycle
-
-To ensure optimal query performance, enforce data integrity, and automate storage tiering, six specialized indexes are maintained on `sensor_activations`:
-
-| Index Name | Index Key Specification | Type | Technical Rationale & Mechanics |
-|---|---|---|---|
-| `_id_` | `{ _id: 1 }` | Standard B-Tree | Default unique primary key generated automatically by MongoDB for document identification. |
-| `device_time` | `{ device_id: 1, timestamp: -1 }` | Compound B-Tree | **Equality-Sort-Range (ESR) Optimization:** Filters by `device_id` and scans timestamps in reverse chronological order for latest readings and history. |
-| `alert_time` | `{ alert: 1, timestamp: -1 }` | Compound B-Tree | Accelerates alert filtering (`/api/telemetry/alerts`), allowing rapid retrieval of active system warnings. |
-| `type_time` | `{ device_type: 1, timestamp: -1 }` | Compound B-Tree | Supports multi-sensor fleet analysis, aggregating metrics across sensor classifications. |
-| `timestamp_ttl` | `{ timestamp: 1 }` | TTL Index (`expireAfterSeconds: 2592000`) | **Storage Limitation Compliance:** MongoDB background thread automatically purges documents older than 30 days. |
-| `device_time_unique` | `{ device_id: 1, timestamp: 1 }` | **Unique Compound** | **Idempotent Ingestion Enforcement:** Rejects duplicate MQTT messages caused by QoS 1 network retransmissions. |
-
-Companion collections also feature dedicated indexes:
-* `homes`: `{ home_id: 1 }` (Unique).
-* `devices`: `{ device_id: 1 }` (Unique).
-* `rejected_messages`: `{ received_at: 1 }` (TTL: 7 days / 604,800 seconds).
-* `failover_probe`: `{ created_at: 1 }` (TTL: 7 days / 604,800 seconds).
-
-### 5.4 Schema Design Anti-Patterns Avoided
-
-During data architectural planning, two prevalent NoSQL anti-patterns were evaluated and deliberately avoided:
-1. **The Unbounded Array Anti-Pattern:** A tempting initial modeling strategy in document databases is embedding an array of telemetry readings directly inside each device document in the `devices` collection (`devices.readings: [{ ... }, { ... }]`). While intuitive, this approach severely degrades performance. As thousands of readings append to the array, the document continuously expands, repeatedly exceeding WiredTiger memory page boundaries. This triggers expensive disk reallocations, memory fragmentation, and eventual failure when reaching the hard 16 MB BSON size limit. By storing telemetry readings as independent documents in `sensor_activations`, document size remains constant (~500 bytes), ensuring predictable write performance.
-2. **The Over-Normalization Anti-Pattern:** Conversely, decomposing every telemetry field into independent collections (`depth_measurements`, `switch_states`, `actuator_logs`) mimics relational design without relational join performance. In MongoDB, executing `$lookup` aggregation stages across multiple collections incurs high memory and CPU overhead. Storing the complete telemetry state within a single document achieves optimal read and write balance.
+* Andrew Banks and Rahul Gupta (2014) *MQTT Version 3.1.1*. OASIS Standard, 29 October. Available at: https://docs.oasis-open.org/mqtt/mqtt/v3.1.1/os/mqtt-v3.1.1-os.html (Accessed: 2 October 2026).
+* Birmingham City University (2024) *CMP6207 Modern Data Stores: Coursework Assignment Brief, Academic Year 2024–25*. Birmingham: Birmingham City University.
+* Fay Chang, Jeffrey Dean, Sanjay Ghemawat, Wilson C. Hsieh, Deborah A. Wallach, Mike Burrows, Tushar Chandra, Andrew Fikes and Robert E. Gruber (2006) 'Bigtable: A distributed storage system for structured data', in *Proceedings of the 7th USENIX Symposium on Operating Systems Design and Implementation (OSDI '06)*. Seattle, WA: USENIX Association, pp. 205–218.
+* Edgar F. Codd (1970) 'A relational model of data for large shared data banks', *Communications of the ACM*, 13(6), pp. 377–387.
+* Giuseppe DeCandia, Deniz Hastorun, Madan Jampani, Gunavardhan Kakulapati, Avinash Lakshman, Alex Pilchin, Swaminathan Sivasubramanian, Peter Vosshall and Werner Vogels (2007) 'Dynamo: Amazon’s highly available key-value store', *ACM SIGOPS Operating Systems Review*, 41(6), pp. 205–220.
+* Seth Gilbert and Nancy Lynch (2002) 'Brewer’s conjecture and the feasibility of consistent, available, partition-tolerant web services', *ACM SIGACT News*, 33(2), pp. 51–59.
+* Martin Kleppmann (2017) *Designing Data-Intensive Applications: The Big Ideas Behind Reliable, Scalable, and Maintainable Systems*. Sebastopol, CA: O’Reilly Media.
+* MongoDB (n.d.a) *mongodump: Database tools*. Available at: https://www.mongodb.com/docs/database-tools/mongodump/ (Accessed: 2 October 2026).
+* MongoDB (n.d.b) *Replica set elections*. Available at: https://www.mongodb.com/docs/manual/core/replica-set-elections/ (Accessed: 2 October 2026).
+* MongoDB (n.d.c) *Compound indexes*. Available at: https://www.mongodb.com/docs/manual/core/indexes/index-types/index-compound/ (Accessed: 2 October 2026).
+* MongoDB (n.d.d) *Data modeling in MongoDB*. Available at: https://www.mongodb.com/docs/manual/data-modeling/ (Accessed: 2 October 2026).
+* MongoDB (n.d.e) *Replication*. Available at: https://www.mongodb.com/docs/manual/replication/ (Accessed: 2 October 2026).
+* MongoDB (n.d.f) *Security checklist for self-managed deployments*. Available at: https://www.mongodb.com/docs/manual/administration/security-checklist/ (Accessed: 2 October 2026).
+* MongoDB (n.d.g) *Sharding*. Available at: https://www.mongodb.com/docs/manual/sharding/ (Accessed: 2 October 2026).
+* MongoDB (n.d.h) *Transactions*. Available at: https://www.mongodb.com/docs/manual/core/transactions/ (Accessed: 2 October 2026).
+* MongoDB (n.d.i) *Schema validation*. Available at: https://www.mongodb.com/docs/manual/core/schema-validation/ (Accessed: 2 October 2026).
+* MongoDB (n.d.j) *Write concern*. Available at: https://www.mongodb.com/docs/manual/reference/write-concern/ (Accessed: 2 October 2026).
+* Neo4j (n.d.) *Graph database concepts*. Available at: https://neo4j.com/docs/getting-started/appendix/graphdb-concepts/ (Accessed: 2 October 2026).
+* PostgreSQL Global Development Group (n.d.a) *PostgreSQL 18 documentation: Constraints*. Available at: https://www.postgresql.org/docs/18/ddl-constraints.html (Accessed: 2 October 2026).
+* PostgreSQL Global Development Group (n.d.b) *PostgreSQL 18 documentation: Transaction isolation*. Available at: https://www.postgresql.org/docs/18/transaction-iso.html (Accessed: 2 October 2026).
+* PostgreSQL Global Development Group (n.d.c) *PostgreSQL 18 documentation: JSON types*. Available at: https://www.postgresql.org/docs/18/datatype-json.html (Accessed: 2 October 2026).
+* Redis (n.d.) *Redis data types*. Available at: https://redis.io/docs/latest/develop/data-types/ (Accessed: 2 October 2026).
+* Michael Stonebraker (2010) 'SQL databases v. NoSQL databases', *Communications of the ACM*, 53(4), pp. 10–11.
 
 ---
 
-## 6. Implementation and Real-Time Data Flow
+## Appendix A: Dataset Provenance and Synthesis Profile
 
-### 6.1 Edge Simulation and Continuous Physics Modeling
-
-To produce statistically sound telemetry for benchmarking and automated testing, the edge simulator (`src/simulator.js`) implements a continuous physics engine. The model is based on the differential equation of mass conservation within a closed reservoir:
-
-$$\frac{dV}{dt} = Q_{\text{in}} - Q_{\text{out}} + \xi(t)$$
-
-Where:
-* $V$ is water volume in litres ($0 \le V \le 2000\text{ L}$).
-* $Q_{\text{in}} = +16\text{ L/s}$ ($+0.8\%$ tank depth per second) when the inlet solenoid valve is in state `OPEN`.
-* $Q_{\text{out}} = -8\text{ L/s}$ ($-0.4\%$ tank depth per second) when the booster pump is in state `ACTIVE`.
-* $\xi(t) \sim \mathcal{N}(0, \sigma^2)$ is Gaussian measurement noise ($\sigma = 0.05\%$) simulating acoustic dispersion on the ultrasonic sensor face.
-* Time delta $\Delta t$ between emissions is dynamically jittered between 2.0 and 9.0 seconds ($< 10$ seconds), emulating asynchronous edge microcontrollers.
-
-### 6.2 Dual-Threshold Hysteresis and Anti-Chattering Control
-
-A critical design requirement in water automation is the prevention of actuator chattering. If an automation system relies upon a single static setpoint (e.g., valve opens below 50% and closes above 50%), natural surface waves and sensor noise cause the actuator relay to switch on and off multiple times per minute. In physical infrastructure, rapid relay cycling causes severe electrical arcing, motor overheating, and premature pump failure.
-
-The IoThings system solves this by implementing closed-loop control governed by dual-threshold hysteresis loops defined in `src/lib/devices.js`:
-
-```mermaid
-stateDiagram-v2
-    direction LR
-    [*] --> HighLevel: Initial State
-
-    state "Inlet Valve Closed<br/>(Water Level Draining)" as ValveClosed
-    state "Inlet Valve Open<br/>(Water Level Replenishing)" as ValveOpen
-
-    ValveClosed --> ValveOpen: Level <= 40% (INLET_OPEN_BELOW)
-    ValveOpen --> ValveClosed: Level >= 85% (HIGH_LEVEL Overflow)
-    ValveOpen --> ValveOpen: 40% < Level < 85% (State Persists - No Chattering)
-    ValveClosed --> ValveClosed: 40% < Level < 85% (State Persists - No Chattering)
-```
-
-The operational state machine maintains memory across readings to enforce stable hysteresis bands:
-1. **Inlet Valve Control Band:**
-   * When the tank is full, the valve is `CLOSED`.
-   * Water drains continuously under domestic consumption. When depth reaches $\le 40\%$ (`INLET_OPEN_BELOW`), the valve transitions to `OPEN`.
-   * As the tank refills through the intermediate band ($40\% < \text{Level} < 85\%$), the valve remains strictly **OPEN**.
-   * The valve closes only when depth reaches or exceeds the upper overflow boundary $\ge 85\%$ (`HIGH_LEVEL`).
-2. **Booster Pump Protection Band:**
-   * Under normal operation, the booster pump is `ACTIVE`.
-   * If water level drops to $\le 25\%$ (`LOW_LEVEL`), the pump enters emergency dry-run shutdown (`EMERGENCY_STOP`) to prevent pump impeller cavitation and thermal burnout.
-   * As water begins replenishing ($25\% < \text{Level} < 35\%$), the pump remains **INACTIVE**.
-   * Pumping resumes (`ACTIVE`) only when the water level safely clears $\ge 35\%$ (`PUMP_RESUME_ABOVE`).
-
-### 6.3 Algorithmic Rate-of-Drop Leak Detection
-
-In domestic plumbing installations, pipe fractures downstream of the storage tank or reservoir seam failures can cause catastrophic structural flooding. While physical float switches detect static boundaries (overflow and dry-run), they cannot detect leaks occurring while water levels reside within safe mid-range boundaries (e.g., dropping from 70% to 50%).
-
-The IoThings rules engine (`evaluateAlerts()`) implements algorithmic rate-of-drop leak detection by computing the temporal gradient across consecutive readings:
-
-$$\Delta L = L(t) - L(t_{\text{prev}}), \quad \Delta t = t - t_{\text{prev}}$$
-
-$$\text{Leak Condition} = (\text{Pump State} == \text{INACTIVE}) \land (\Delta t \le 30\text{ s}) \land (-\Delta L \ge 2.5\%)$$
-
-If the booster pump is inactive (meaning water is not being legitimately drawn by household fixtures) and the water level drops by 2.5% or more within a 30-second window, the system flags an immediate `LEAK_DETECTED` alert. The event is recorded in `smart_water.alerts` with critical severity, and an automated alert transition is dispatched to property maintenance staff via Telegram.
-
-### 6.4 Ingestion Idempotency and Dead-Letter Queue Architecture
-
-Under MQTT QoS 1 transport, network interruptions between the broker and subscriber trigger message re-deliveries. Without defensive database engineering, duplicate readings pollute historical aggregates and distort consumption metrics.
-
-The ingestion engine enforces end-to-end resilience through three mechanisms:
-1. **Idempotent Ingestion via Unique Indexes:** The unique compound index `{ device_id: 1, timestamp: 1 }` rejects duplicate deliveries. When a duplicate message arrives, MongoDB throws error `E11000 duplicate key error collection`. The ingestion service catches code 11000, logs `[ingest] duplicate skipped: <device_id> <timestamp>`, increments `ingestionStats.duplicates`, and continues execution smoothly.
-2. **Dead-Letter Queue (`rejected_messages`):** If malformed or non-JSON payloads arrive on the MQTT topic, `validatePayload()` intercepts the error. The raw payload, arrival timestamp, topic, and validation error are persisted into `rejected_messages`, governed by a 7-day TTL index.
-3. **Real-Time Operational Metrics:** Live ingestion statistics are exposed via `GET /api/stats` and integrated into `GET /api/health`, providing transparent monitoring of `stored`, `duplicates`, and `rejected` counts.
-
-### 6.5 Automated Test Verification Evidence
-
-The entire automation suite was evaluated using an automated test runner (`src/test.js`) executing 14 unit and integration tests across rules, clustering, idempotency, and CRUD lifecycle:
-
-[INSERT: Automated Test Suite Output from evidence/test-output.txt]
-
-```
-============================================================
- IoThings Sensor Automation System - Automated Test Suite
- Module: CMP6207 Modern Data Stores | Verification Suite
-============================================================
-
-[PASS] Validation: rejects malformed payloads and invalid timestamps
-[PASS] Validation: accepts correct HOME_HUB_01 payload structure
-[PASS] Rules Engine: triggers TANK_OVERFLOW at level >= 85%
-[PASS] Rules Engine: triggers TANK_DRY_RUN at level <= 25%
-[PASS] Rules Engine: triggers LEAK_DETECTED on sudden water level drop
-[PASS] Automation Control: prevents valve and pump chattering via dual-threshold hysteresis
-[PASS] Automation Control: supports MANUAL override state persistence
-[PASS] Distributed Cluster: verifies replica set connectivity & status
-[PASS] Data Modeling: verifies collections and schema setup
-[PASS] Data Integrity: compound unique index enforces duplicate write rejection
-[PASS] Telemetry CRUD: insert, read, update with alert recomputation, and delete
-[PASS] Registry CRUD [Homes]: insert, query by home_id, patch, and delete
-[PASS] Registry CRUD [Devices]: insert, query by device_id, patch, and delete
-[PASS] Dead-Letter Queue: stores invalid messages with TTL indexing
-
-============================================================
- Test Summary: 14 passed, 0 failed.
-============================================================
-```
-
-### 6.6 Mathematical Derivation of Hysteresis State Stability
-
-The mechanical reliability of the water system relies upon the mathematical stability of the dual-threshold hysteresis margins. Let the water depth percentage be denoted by $L(t) \in [0, 100]$. The inlet valve switching function $S_{\text{valve}}(L, t)$ is modeled as a non-linear Schmitt trigger:
-
-$$S_{\text{valve}}(L, t) = \begin{cases} 
-1 \text{ (OPEN)}, & \text{if } L(t) \le L_{\text{low}} \\ 
-0 \text{ (CLOSED)}, & \text{if } L(t) \ge L_{\text{high}} \\ 
-S_{\text{valve}}(L, t - \delta t), & \text{if } L_{\text{low}} < L(t) < L_{\text{high}} 
-\end{cases}$$
-
-Where the lower threshold $L_{\text{low}} = 40.0\%$ and the upper threshold $L_{\text{high}} = 85.0\%$. The hysteresis deadband width is therefore:
-
-$$\Delta H_{\text{valve}} = L_{\text{high}} - L_{\text{low}} = 85.0\% - 40.0\% = 45.0\%$$
-
-Similarly, the booster pump dry-run protection margin is governed by:
-
-$$\Delta H_{\text{pump}} = L_{\text{resume}} - L_{\text{cutoff}} = 35.0\% - 25.0\% = 10.0\%$$
-
-Given that high-frequency sensor noise $\xi(t)$ exhibits a three-sigma bound of $3\sigma = 3(0.05\%) = 0.15\%$, the noise magnitude is more than two orders of magnitude smaller than the narrowest hysteresis deadband ($\Delta H_{\text{pump}} = 10.0\% \gg 0.15\%$). This mathematical divergence guarantees that sensor noise fluctuations can never inadvertently toggle actuator states when the physical water level resides within the operational bands, ensuring provable anti-chattering stability.
-
----
-
-## 7. High Availability, Quorum and Fault Tolerance
-
-### 7.1 Distributed Consensus and Replication Architecture
-
-High availability in MongoDB is implemented via an active-passive consensus cluster termed a **Replica Set** (Chodorow, 2013). The IoThings deployment utilizes a 3-node replica set designated `rs0`, operating across distinct network ports on localhost:
-
-* **Primary Member (Port 27017):** Processes all write operations and default read queries.
-* **Secondary Member 1 (Port 27018):** Maintains a replicated copy of data and serves analytical queries.
-* **Secondary Member 2 (Port 27019):** Maintains a replicated copy of data and participates in leader elections.
-
-Replication in MongoDB is governed by an adaptation of the Raft consensus algorithm (Ongaro and Ousterhout, 2014). When an insert is executed with majority write concern (`w: "majority"`), the Primary writes the document to its local WiredTiger storage engine and appends the operation to its internal capped replication log: the **Operation Log (`local.oplog.rs`)**.
-
-Secondary members continuously tail the Primary's oplog using long-polling tailable cursors. As new oplog entries appear, secondaries apply the modifications locally to replicate state changes asynchronously:
-
-```mermaid
-sequenceDiagram
-    autonumber
-    participant App as Express API / Ingestion
-    participant P as Primary (Port 27017)
-    participant S1 as Secondary 1 (Port 27018)
-    participant S2 as Secondary 2 (Port 27019)
-
-    App->>P: insertOne(doc, { w: "majority" })
-    Note over P: Write to Local Engine & Append to oplog.rs
-    par Oplog Replication Stream
-        P->>S1: Stream Oplog Entry
-        S1->>S1: Apply Oplog Locally
-        S1-->>P: Acknowledge Write
-    and
-        P->>S2: Stream Oplog Entry
-        S2->>S2: Apply Oplog Locally
-        S2-->>P: Acknowledge Write
-    end
-    Note over P: Quorum Reached (2/3 nodes acknowledged)
-    P-->>App: Majority Write Acknowledged (Zero Loss Guarantee)
-```
-
-### 7.2 Strict Clarification of Replica Set Capabilities
-
-To ensure absolute academic and professional precision, three critical distinctions regarding replica sets must be established:
-1. **High Availability, Not Horizontal Scaling:** A replica set provides fault tolerance and high availability; it does **not** provide horizontal write scaling. Every write operation must still be processed by the single Primary node and replicated across all secondaries. Horizontal write scalability requires database sharding across separate replica sets.
-2. **Not a Substitute for Backup:** Replication protects against physical server outages, but it does **not** protect against logical data corruption, accidental drop commands, or malicious deletion. An erroneous `dropDatabase()` executed on the Primary is faithfully replicated to all secondaries within milliseconds. Independent snapshots and logical dumps (`mongodump`) remain mandatory.
-3. **No Claim of "Zero Downtime":** When a Primary node fails, the cluster undergoes **automatic failover with no acknowledged-write loss; accompanied by a brief write pause during election**.
-
-### 7.3 Quorum Calculation and Minority Failure Analysis
-
-In a distributed cluster of $N$ voting members, strict majority consensus requires:
-$$\text{Quorum} = \left\lfloor \frac{N}{2} \right\rfloor + 1$$
-
-For our 3-node cluster ($N = 3$), the required quorum is:
-$$\text{Quorum} = \left\lfloor \frac{3}{2} \right\rfloor + 1 = 2 \text{ nodes}$$
-
-The cluster can tolerate the failure of at most:
-$$F = N - \text{Quorum} = 3 - 2 = 1 \text{ node}$$
-
-* **Single Node Outage (Node 27017 fails):** 2 nodes remain online (`27018` and `27019`). Since $2 \ge 2$, quorum is maintained. The remaining nodes elect a new Primary, and writes resume.
-* **Two Node Outage (Nodes 27017 and 27018 fail):** Only 1 node remains online (`27019`). Since $1 < 2$, quorum is lost. In accordance with Raft rules, `27019` transitions to (or remains) a `SECONDARY` and immediately rejects all write operations. Writes are completely paused until a second node rejoins the cluster.
-
-This was empirically proven by the quorum demo script (`npm run quorum:demo` / `scripts/quorum-demo.js`), which verifies that attempting a majority write when two nodes are down results in a `ServerSelectionTimeoutError` or `WriteConcernError`.
-
-### 7.4 Live Cluster Verification Evidence
-
-The live state of `rs0` was extracted directly using `npm run evidence`, verifying active replication and identical document synchronization across all three nodes:
-
-[INSERT: Table of Replica Set Member States from evidence/rs-status-*.json]
-
-| Node Member | State | Health | Uptime (s) | Optime Date |
-|---|---|---|---|---|
-| `localhost:27017` | **PRIMARY** | 1 (Healthy) | 3613 s | `2026-10-02T06:46:10.000Z` |
-| `localhost:27018` | **SECONDARY** | 1 (Healthy) | 3553 s | `2026-10-02T06:46:10.000Z` |
-| `localhost:27019` | **SECONDARY** | 1 (Healthy) | 3553 s | `2026-10-02T06:46:10.000Z` |
-
-[INSERT: Member Count Verification Table from evidence/member-counts-*.json]
-
-| Member Node Endpoint | Direct Connection Status | `sensor_activations` Document Count | Replication Delta |
-|---|---|---|---|
-| `127.0.0.1:27017` | ONLINE (Primary) | **30,985** | 0 (Synchronized) |
-| `127.0.0.1:27018` | ONLINE (Secondary) | **30,985** | 0 (Synchronized) |
-| `127.0.0.1:27019` | ONLINE (Secondary) | **30,985** | 0 (Synchronized) |
-
-### 7.5 Failover Measurement and Write Pause Analysis
-
-To measure cluster failover behavior empirically, the continuous failover probe (`scripts/measure-failover.js`) was executed. The probe issues writes with `w: "majority"` and `retryWrites: true` every 500 ms while monitoring write latencies:
-
-[INSERT: Failover Probe Results from evidence/failover-*.json]
-
-```
-============================================================
- FAILOVER PROBE MEASUREMENT RESULTS
-============================================================
- Total Attempted Writes:       19
- Total Acknowledged (w:maj):   19
- Writes Paused / Failed:       0
- Longest Write Pause:          0.53 s (530 ms)
- Average Ack Latency:          16 ms
- Missing Acknowledged Writes:  0 (Zero Data Loss Verified)
-============================================================
-```
-
-#### Controlled Failover Procedure (Graceful vs. Hard Kill)
-As documented in `docs/failover-steps.md`:
-* **Graceful Primary Step-Down (`rs.stepDown()`):** The primary flushes journals and instructs a secondary to initiate an election immediately. The write pause is minimal (~2 to 4 seconds).
-* **Forcible Termination (`kill -9 <pid>`):** Heartbeat loss requires `heartbeatTimeoutSecs` (10 seconds) to detect failure before secondaries initiate a Raft election. During this 10 to 12-second election window, write operations are paused. The MongoDB Node.js driver automatically buffers mutating operations (`retryWrites: true`), resuming writes seamlessly once the new Primary is crowned, achieving **automatic failover with no acknowledged-write loss**.
-
-### 7.6 Disaster Recovery, Snapshotting and Backup Engineering
-
-A foundational principle of distributed systems engineering is that replication is not a backup (Kleppmann, 2017). Replication guards exclusively against physical hardware, operating system, and network interface failures. If an application defect issues an unconstrained `collection.deleteMany({})` or an attacker drops a collection, the destructive command is recorded in the Primary's oplog and executed across all secondary replicas within milliseconds.
-
-To achieve complete disaster readiness, the IoThings operational lifecycle implements a two-tier backup and recovery strategy:
-1. **Point-in-Time Recovery (PITR):** Full logical backups are produced nightly via `mongodump --oplog --gzip --archive=/backups/backup-$(date +%F).gz`. The `--oplog` flag captures oplog entries emitted during the dump operation, ensuring a transactionally consistent snapshot. In the event of catastrophic data corruption, the database is restored via `mongorestore --oplogReplay`, allowing restoration to any microsecond preceding the corruptive event.
-2. **Crash-Consistent Volume Snapshots:** In production virtualized environments (e.g., AWS EBS or Linux LVM), block-level storage snapshots are captured. To prevent filesystem inconsistency, the storage engine is placed into a read-only lock using `db.fsyncLock()`, the storage volume is snapshotted, and the engine is unlocked via `db.fsyncUnlock()`. This provides an instantaneous recovery point without impacting replication stream integrity.
-
----
-
-## 8. Query Execution, Aggregation Pipeline and Benchmark Evaluation
-
-### 8.1 Read Preferences and Workload Isolation
-
-In modern IoT architectures, running resource-intensive historical aggregations concurrently with high-throughput telemetry ingestion on the Primary node creates resource contention. Analytical queries monopolize CPU cores and evict active working-set data from the WiredTiger cache, increasing write latencies.
-
-To eliminate contention, the IoThings platform implements **Workload Isolation** using MongoDB Read Preferences:
-* **Ingestion and Control Mutations:** Directed strictly to the Primary (`127.0.0.1:27017`) using `w: "majority"`.
-* **Analytical Queries and History:** Configured with `readPreference: new ReadPreference('secondaryPreferred')`.
-
-When analytical endpoints (`/api/telemetry/analytics/averages`, `/api/telemetry/history`) are executed, the MongoDB driver automatically routes requests to Secondary nodes (`27018` or `27019`). If secondaries become unreachable, queries fall back gracefully to the Primary. This decouples analytics from ingestion, preserving sub-millisecond control responsiveness.
-
-### 8.2 Historical Aggregation Pipelines
-
-The historical analytics endpoint (`/api/telemetry/history?bucket=hour`) utilizes a native MongoDB multi-stage aggregation pipeline to compute time-bucketed aggregations:
-
-```mermaid
-flowchart LR
-    S1["$match Stage<br/>Filter device_id & time range"]
-    S2["$group Stage<br/>$dateTrunc by minute/hour<br/>$avg, $min, $max"]
-    S3["$sort Stage<br/>Order chronologically (_id: 1)"]
-    S4["$limit Stage<br/>Cap at 500 bucket points"]
-    S1 --> S2 --> S3 --> S4
-```
-
-```javascript
-[
-  { $match: { device_id: 'HOME_HUB_01', timestamp: { $gte: fallbackDate } } },
-  {
-    $group: {
-      _id: { $dateTrunc: { date: '$timestamp', unit: 'hour' } },
-      avg: { $avg: '$telemetry.water_tank.ultrasonic_depth_pct' },
-      min: { $min: '$telemetry.water_tank.ultrasonic_depth_pct' },
-      max: { $max: '$telemetry.water_tank.ultrasonic_depth_pct' },
-      count: { $sum: 1 }
-    }
-  },
-  { $sort: { _id: 1 } },
-  { $limit: 500 }
-]
-```
-
-### 8.3 Scale Benchmarking: COLLSCAN vs. IXSCAN Evaluation
-
-To demonstrate the concrete performance benefits of compound B-Tree indexing on real data, a query benchmark was executed on the seeded dataset of **30,985 documents** using `npm run benchmark` (`src/benchmark.js`).
-
-The benchmark evaluated the core query pattern utilized by the web dashboard:
-```javascript
-db.sensor_activations.find({ device_id: "HOME_HUB_01" }).sort({ timestamp: -1 }).limit(50)
-```
-
-[INSERT: Benchmark ExecutionStats Table from evidence/benchmark-*.txt]
-
-| Evaluation Metric | Full Collection Scan (`COLLSCAN`) | Compound B-Tree Index (`device_time`) | Concrete Optimization |
-|---|---|---|---|
-| **Execution Stage** | `SORT` (In-Memory Sort) | `LIMIT` $\to$ `IXSCAN` | Elimination of Sort Stage |
-| **Documents Returned** | 50 | 50 | Exact Match |
-| **Documents Examined (Read)**| **30,985 documents** | **50 documents** | **30,935 fewer disk/cache reads** |
-| **Keys Examined** | 0 | 50 | $O(\log N)$ B-Tree Key Seek |
-| **Execution Latency (ms)** | **105 ms** | **1 ms** | **105.0x Execution Speedup** |
-
-#### Theoretical Algorithmic Analysis
-1. **Unindexed Collection Scan (`COLLSCAN`):** Without an index, the WiredTiger storage engine must perform an $O(N)$ linear traversal across all 30,985 documents on disk or memory cache. Furthermore, because sorting cannot leverage an index, MongoDB buffers all matching records into the server's 32 MB internal sort buffer (`SORT` stage). As the collection grows into hundreds of thousands of records, unindexed queries trigger `SortExceededMemoryLimitException` and exhaust server memory.
-2. **Compound Index Scan (`IXSCAN`):** The compound index `{ device_id: 1, timestamp: -1 }` stores keys in pre-sorted B-Tree order. The database performs an $O(\log N)$ root-to-leaf traversal to find `HOME_HUB_01`, traverses the top 50 contiguous index entries, and reads only the exact 50 target documents. This reduces I/O operations by 99.84% and yields an instantaneous 1 ms response time.
-
-### 8.4 Memory Boundaries and the Equality-Sort-Range (ESR) Indexing Rule
-
-To guarantee that high-frequency analytical queries execute within predictable memory boundaries, the database design adheres strictly to MongoDB's **Equality-Sort-Range (ESR)** indexing heuristic (Chodorow, 2013). The ESR rule dictates the optimal order of fields within a compound index:
-1. **Equality (`E`):** Fields queried with exact values must appear first. In our primary index `{ device_id: 1, timestamp: -1 }`, `device_id` is positioned first because telemetry queries always isolate a specific physical asset (`device_id: 'HOME_HUB_01'`).
-2. **Sort (`S`):** Fields specifying query ordering must appear second. Positioning `timestamp: -1` immediately following the equality key allows the database engine to traverse the index leaf nodes in exact descending temporal sequence. This completely bypasses the in-memory sorting stage (`SORT`), directly satisfying the query via a `LIMIT` stage.
-3. **Range (`R`):** Fields specifying range inequalities (such as `$gte` or `$lte` date filters) appear last.
-
-If the index fields were inverted to `{ timestamp: -1, device_id: 1 }`, the query planner would be forced to execute a range scan across the entire timestamp index, inspecting keys across all devices before filtering by `device_id`. Furthermore, individual aggregation pipeline stages in MongoDB are subject to a strict 100 MB RAM limitation. If an unindexed aggregation exceeds 100 MB of working memory, the pipeline aborts unless `allowDiskUse: true` is explicitly passed. By anchoring the aggregation pipeline to the ESR-compliant `device_time` index, the `$match` filter executes via `IXSCAN`, streaming pre-filtered documents into the `$group` stage and maintaining memory consumption well under 2 megabytes.
-
----
-
-## 9. Critical Evaluation and Discussion
-
-### 9.1 Strengths of the Implemented Architecture
-
-1. **Robust High Availability:** The 3-node replica set provides automatic failover with zero acknowledged-write loss. The use of `w: "majority"` ensures that committed telemetry is written to durable journals on at least two nodes before returning an acknowledgment.
-2. **Idempotent Ingestion Integrity:** The compound unique index `{ device_id: 1, timestamp: 1 }` prevents data duplication arising from network re-transmissions under MQTT QoS 1.
-3. **Mechanical Preservation via Hysteresis:** The dual-threshold control architecture effectively eliminates actuator chattering, preserving the physical lifespan of water valves and booster pumps.
-4. **Transparent Data Modeling:** The combination of referenced registries and embedded telemetry documents maximizes read locality while preventing redundant storage of customer metadata.
-
-### 9.2 Limitations and Constraints
-
-1. **Single-Primary Write Bottleneck:** Because all writes must traverse the single Primary node, write throughput is bound by the hardware capacity (CPU, IOPS) of that single server. Horizontal scaling requires sharding.
-2. **Cross-Center Network Latency:** In a multi-datacenter deployment, requiring majority replication across WAN links increases write acknowledgment latency by the round-trip time (RTT) between geographic regions.
-3. **Storage Overhead of BSON Keys:** Unlike columnar storage formats (e.g., Apache Parquet), BSON repeats field names inside every document, resulting in higher storage consumption.
-
----
-
-## 10. Security Hardening, Operations and UK GDPR Compliance
-
-### 10.1 API Authentication and Authorization
-
-To prevent unauthorized manipulation of IoT actuators, all modifying REST routes (POST, PATCH, DELETE) are protected by API key middleware requiring the `X-API-Key` header. Direct telemetry mutations (`/api/telemetry`) are disabled by default in production and guarded behind an administrative switch (`ENABLE_TELEMETRY_ADMIN=true`), ensuring that operational telemetry enters exclusively through the validated MQTT ingestion pipeline.
-
-### 10.2 UK GDPR Compliance and Data Privacy
-
-Under UK GDPR principles (Data Protection Act 2018), telemetry data linked to domestic households constitutes personal data if it reveals occupancy patterns (e.g., sudden water consumption indicating occupants returning home).
-* **Synthetic Data Generation:** All data utilized in this project was synthetically generated; no live residential telemetry was captured or exposed.
-* **Storage Minimization via TTL:** In accordance with the storage limitation principle (Article 5(1)(e)), raw high-frequency telemetry is automatically purged after 30 days via MongoDB's TTL index (`timestamp_ttl`).
-
----
-
-## 11. Conclusion and Future Work
-
-This project has demonstrated the design, implementation, and verification of a distributed, fault-tolerant NoSQL telemetry platform for IoThings Home Automation Solutions. By replacing an impedance-mismatched relational architecture with a 3-node MongoDB replica set (`rs0`), the system achieves seamless schema evolution, resilient MQTT ingestion, 105x query optimization via compound B-Tree indexing, and automatic failover with zero acknowledged-write loss.
-
-### Future Work
-1. **Horizontal Sharding:** Partitioning the `sensor_activations` collection across multiple replica sets using hashed shard keys (`{ device_id: "hashed", timestamp: 1 }`) to achieve horizontal write scaling.
-2. **MongoDB Time Series Collections:** Migrating to native time-series collections introduced in MongoDB 5.0+, which utilize columnar compression to reduce disk footprint by up to 70%.
-
----
-
-## 12. References
-
-* Abadi, D.J. (2012) 'Consistency tradeoffs in modern distributed database system design: CAP is only part of the story', *Computer*, 45(2), pp. 37-42.
-* Brewer, E. (2012) 'CAP twelve years later: How the "rules" have changed', *Computer*, 45(2), pp. 23-29.
-* Chodorow, K. (2013) *MongoDB: The Definitive Guide*. 2nd edn. Sebastopol, CA: O'Reilly Media.
-* DeCandia, G., Hastorun, D., Jampani, M., Kakulapati, G., Lakshman, A., Pilchin, A., Sivasubramanian, S., Vosshall, P. and Vogels, W. (2007) 'Dynamo: Amazon's highly available key-value store', *ACM SIGOPS Operating Systems Review*, 41(6), pp. 205-220.
-* Gilbert, S. and Lynch, N. (2002) 'Brewer's conjecture and the feasibility of consistent, available, partition-tolerant web services', *ACM SIGACT News*, 33(2), pp. 51-59.
-* Kleppmann, M. (2017) *Designing Data-Intensive Applications: The Big Ideas Behind Reliable, Scalable, and Maintainable Systems*. Sebastopol, CA: O'Reilly Media.
-* Ongaro, D. and Ousterhout, J. (2014) 'In search of an understandable consensus algorithm', in *2014 USENIX Annual Technical Conference (USENIX ATC 14)*, Philadelphia, PA, pp. 305-319.
-* Sadalage, P.J. and Fowler, M. (2012) *NoSQL Distilled: A Brief Guide to the Emerging World of Polyglot Persistence*. Upper Saddle River, NJ: Addison-Wesley.
-* Stonebraker, M. (2010) 'SQL databases v. NoSQL databases', *Communications of the ACM*, 53(4), pp. 10-11.
-* Vohra, D. (2016) *Pro Docker*. Berkeley, CA: Apress.
-
----
-
-## 13. Appendices
-
-### Appendix A: Reproducibility Commands
-
-To reproduce all empirical results and evidence artifacts presented in this report, execute the following commands in the project directory:
-
-```bash
-# 1. Run the automated test verification suite
-npm test | tee evidence/test-output.txt
-
-# 2. Extract cluster state, member counts, and live indexes
-npm run evidence
-
-# 3. Demonstrate polymorphic schema evolution
-npm run demo:schema
-
-# 4. Execute the query performance benchmark
-npm run benchmark
-
-# 5. Measure failover probe durability
-npm run measure:failover -- --duration 10
-
-# 6. Verify report word count compliance
-npm run report:wordcount
-```
+[Appendices pending collation]
