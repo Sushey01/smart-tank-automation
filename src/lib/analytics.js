@@ -7,6 +7,7 @@
 const { ReadPreference } = require('mongodb');
 const WATER_CONFIG = require('./water-config');
 const { HOME_HUB } = require('./devices');
+const { notifyLeakAlert } = require('./telegram');
 
 const secondaryPreferred = { readPreference: new ReadPreference('secondaryPreferred') };
 
@@ -391,6 +392,7 @@ async function evaluateAbnormalOvernightUsage(db, deviceId = HOME_HUB.device_id,
 
       if (!existingAlert) {
         await alertsCollection.insertOne(alertDoc);
+        notifyLeakAlert(alertDoc).catch((err) => console.error('[telegram] alert send error:', err.message));
       }
     }
 

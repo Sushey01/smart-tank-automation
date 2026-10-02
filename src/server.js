@@ -34,7 +34,7 @@ const {
 } = require('./lib/devices');
 const { ensureAllIndexes } = require('./lib/indexes');
 const { deriveInsight } = require('./lib/insights');
-const { notifyAlertTransition } = require('./lib/telegram');
+const { notifyAlertTransition, sendTelegram } = require('./lib/telegram');
 const { setupSwagger } = require('./lib/swagger');
 const WATER_CONFIG = require('./lib/water-config');
 const {
@@ -565,6 +565,12 @@ app.patch('/api/alerts/:id/ack', (req, res) => route(res, async () => {
       timestamp: doc.timestamp instanceof Date ? doc.timestamp.toISOString() : doc.timestamp,
     },
   });
+}));
+
+app.post('/api/alerts/test-telegram', (req, res) => route(res, async () => {
+  const customMessage = (req.body && req.body.message) || '🔔 Manual Test: Smart Water Platform Telegram alerts are online!';
+  await sendTelegram(`🚨 *MANUAL TEST NOTIFICATION*\n${customMessage}\n• Timestamp: \`${new Date().toISOString()}\``);
+  res.json({ success: true, message: 'Telegram test alert dispatched successfully.' });
 }));
 
 async function insertReading(doc) {

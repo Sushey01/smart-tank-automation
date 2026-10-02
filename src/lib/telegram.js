@@ -16,13 +16,14 @@ async function sendTelegram(text) {
     const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: chatId, text }),
+      body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'Markdown' }),
+      signal: AbortSignal.timeout(3000),
     });
     if (!response.ok) {
       console.error(`[telegram] send failed status=${response.status}`);
     }
   } catch (err) {
-    console.error('[telegram] send failed', err.message);
+    console.error('[telegram] send failed:', err.message, err.cause ? (err.cause.code || err.cause.message) : '');
   }
 }
 
@@ -31,7 +32,7 @@ function readingLine(doc, label) {
   const pct = tank ? tank.ultrasonic_depth_pct : '?';
   const volume = tank ? tank.volume_litres : '?';
   const when = doc.timestamp instanceof Date ? doc.timestamp.toISOString() : String(doc.timestamp);
-  return `HOME_HUB_01 ${label}: ${pct}% (${volume} L) at ${when}`;
+  return `🚨 *HOME_HUB_01 ALERT: ${label.toUpperCase()}*\n• Level: *${pct}%* (${volume} L)\n• Timestamp: \`${when}\``;
 }
 
 async function notifyAlertTransition(previous, doc) {
@@ -49,4 +50,19 @@ async function notifyAlertTransition(previous, doc) {
   }
 }
 
-module.exports = { notifyAlertTransition };
+async function notifyLeakAlert(alertDoc) {
+  const text = `🚨 *SMART TANK ANOMALY: ${alertDoc.message || 'Abnormal Leak Detected'}*\n` +
+    `• Device: \`${alertDoc.device_id || 'HOME_HUB_01'}\`\n` +
+    `• Severity: *${(alertDoc.severity || 'warning').toUpperCase()}*\n` +
+    `• Estimated Water Loss: *${alertDoc.estimated_excess_loss_litres || 54} Litres*\n` +
+    `• Measured Drop: *${alertDoc.measured_drop_pct || '?'}%*\n` +
+    `• Recommendation: _${alertDoc.recommendation || 'Check household taps, toilets, and pipelines.'}_\n` +
+    `• Detected Period: \`${alertDoc.detection_period || 'Overnight Quiet Hours'}\``;
+  await sendTelegram(text);
+}
+
+module.exports = {
+  notifyAlertTransition,
+  notifyLeakAlert,
+  sendTelegram,
+};

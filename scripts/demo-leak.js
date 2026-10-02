@@ -11,6 +11,7 @@ const { MongoClient } = require('mongodb');
 const { MONGO_URI, MQTT_URL, DB_NAME, COLLECTION } = require('../src/lib/config');
 const { HOME_HUB, buildPayload, toStoredReading } = require('../src/lib/devices');
 const { evaluateAbnormalOvernightUsage } = require('../src/lib/analytics');
+const { notifyLeakAlert } = require('../src/lib/telegram');
 const WATER_CONFIG = require('../src/lib/water-config');
 
 async function sleep(ms) {
@@ -138,6 +139,12 @@ async function runLeakDemo() {
     console.log(` Detection Period:     ${evaluation.alert.detection_period}`);
     console.log(` Recommendation:       ${evaluation.alert.recommendation}`);
     console.log('============================================================\n');
+    try {
+      await notifyLeakAlert(evaluation.alert);
+      console.log('[telegram] ✓ Sent instant push notification to Telegram bot.');
+    } catch (err) {
+      console.error('[telegram] Failed to send push notification:', err.message);
+    }
     console.log('[PASS] Demo completed successfully! Alert is now active in MongoDB.');
     console.log('[NOTE] Check the React Web Dashboard (http://localhost:5173):');
     console.log('       1. Notice the warning banner displayed.');

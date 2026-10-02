@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Bell, History, LayoutDashboard, Moon, Network, Sun } from 'lucide-react';
 import clsx from 'clsx';
 import { getHealth } from '../api/health';
-import { getSummary } from '../api/telemetry';
+import { getSummary, getWaterInsights } from '../api/telemetry';
 import { ApiError } from '../api/client';
 import { useTheme } from '../lib/theme-context';
 import { SirenControl } from './SirenControl';
@@ -37,8 +37,15 @@ export function AppShell() {
     queryFn: getSummary,
     ...poll,
   });
+  const insights = useQuery({
+    queryKey: ['water-insights', 'shell'],
+    queryFn: () => getWaterInsights(),
+    ...poll,
+  });
   const unreachable = health.isError && health.error instanceof ApiError && health.error.status === 0;
-  const alertActive = Boolean(summary.data?.reading?.alert);
+  const alertActive =
+    Boolean(summary.data?.reading?.alert) ||
+    Boolean(insights.data?.latest_alert && insights.data.latest_alert.status === 'unread');
 
   return (
     <div className="min-h-screen md:grid md:grid-cols-[15rem_1fr]">
