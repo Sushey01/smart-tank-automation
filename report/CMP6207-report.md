@@ -87,13 +87,100 @@ To comply with United Kingdom General Data Protection Regulation (UK GDPR) manda
 
 ---
 
-## 2 Principal NoSQL Types and Theoretical Basis
+## 2 Principal NoSQL Types and Their Theoretical Basis
 
-[Section 2 outline pending critical analysis rewrite]
+### 2.1 Key–Value Stores
 
-## 3 Critical Comparison: Relational vs Document Paradigm
+A key–value store organizes data as a collection of opaque or typed values indexed by a unique alphanumeric key. Direct key lookups operate with $O(1)$ algorithmic time complexity. In distributed implementations, keys are mapped across cluster partitions using consistent hashing algorithms and distributed hash tables, minimizing data migration when cluster membership changes (DeCandia et al., 2007). In a basic key–value store, the database engine treats values as uninterpreted byte arrays, delegating parsing, attribute filtering, and type checking to client application code.
 
-[Section 3 outline pending critical analysis rewrite]
+The primary advantage of key–value technology is exceptional write and read throughput combined with horizontal partitionability. However, its fundamental limitation is an inability to perform secondary field filtering, attribute range queries, or multi-field mathematical aggregations without retrieving the entire payload over the network. In more advanced platforms such as Redis, developers can utilize specialized data structures including sorted sets and streams (Redis, n.d.). For IoThings, key–value storage represents an ideal caching mechanism for transient operational states, such as caching the latest actuator commands for `HOME_HUB_01`. Nevertheless, key–value technology is unsuitable as the primary repository for historical tank telemetry because computing hourly consumption averages or windowed depth aggregations would require client-side extraction of entire time series, creating severe network bottlenecks.
+
+### 2.2 Document Stores
+
+Document databases store information as semi-structured, self-describing records utilizing formats such as JSON, XML, or BSON (Binary JSON). Unlike relational tables, document databases do not enforce uniform columns across all documents in a collection. Documents naturally represent rich domain entities by embedding nested subdocuments, scalar values, and arrays within a single record, aligning with object-oriented application models without object-relational mapping layers (MongoDB, n.d.d). Internally, storage engines such as WiredTiger organize documents into B-Tree structures where internal nodes guide logarithmic traversals ($O(\log N)$) and secondary indexes point directly to document storage addresses.
+
+The major benefit of document stores is schema flexibility combined with deep indexability. Secondary indexes can be constructed on arbitrary nested fields (such as `telemetry.water_tank.ultrasonic_depth_pct`), while aggregation frameworks perform in-database filtering, grouping, and statistical projection. The primary trade-off is storage overhead: because field names are repeated across BSON documents, memory and disk footprints are larger than normalized tabular rows. Furthermore, maintaining referential integrity across separate collections requires client-side validation rather than database-enforced foreign keys. For IoThings, MongoDB is highly appropriate because each telemetry snapshot naturally combines synchronized depth, float switch, and relay states into a single BSON document that is written and queried atomically.
+
+### 2.3 Wide-Column Stores
+
+Wide-column systems organize data into sparse multidimensional mappings indexed by row key, column key, and timestamp. Pioneered by Google Bigtable, wide-column architectures partition row key ranges across tablets distributed across worker nodes (Chang et al., 2006). Log-Structured Merge (LSM) trees are commonly employed as the core storage engine. Writes are appended sequentially to an in-memory memtable and commit log, providing exceptional append throughput, before being periodically flushed to immutable on-disk SSTables and compacted in the background.
+
+The advantage of wide-column systems is horizontal write scalability across commodity server nodes combined with efficient sparse storage, as null attributes consume no disk space. However, wide-column stores impose rigid query patterns governed entirely by row key design. Queries that deviate from the primary partition key require secondary index tables or distributed full-table scans. For IoThings, wide-column technology represents an unnecessary operational burden at the current laboratory scale of 30,985 documents. Managing Cassandra or ScyllaDB cluster topology and tombstone compaction cannot be justified when a document store satisfies the analytical workload with lower administrative complexity.
+
+### 2.4 Graph Stores
+
+Graph databases represent domain entities as nodes, relationships as directed edges, and properties as key–value attributes on either construct. Graph engines implement index-free adjacency, wherein each node maintains direct memory pointers to its adjacent edges and neighboring nodes (Neo4j, n.d.). Consequently, traversing relationships across complex networks executes in time proportional to the traversed subgraph rather than overall dataset size.
+
+The theoretical strength of graph databases lies in executing recursive, multi-hop relationship traversals, such as supply chain dependency analysis, identity access management, or social network graphs. The critical drawback is poor performance on high-velocity linear append-only time series. Graph structures introduce significant storage and memory pointer overhead. While IoThings could theoretically model relationships between domestic properties, tenant permissions, and pipe topologies in a graph database, tank telemetry consists of linear, timestamped numerical observations. Graph technology is therefore ill-suited for the primary telemetry ingestion store.
+
+### 2.5 Consistency Theory and Selection
+
+Distributed database selection is governed by the theoretical bounds of Eric Brewer's CAP Theorem, which formally proves that across an asynchronous network subject to partitions ($P$), a distributed system can guarantee at most linearizable consistency ($C$) or availability ($A$) (Gilbert and Lynch, 2002). The CAP theorem is frequently misunderstood as a mandate to casually "pick two" properties during routine operation. As Brewer (2012) clarified, normal execution provides both consistency and availability; the trade-off manifests strictly when a network partition separates cluster nodes.
+
+Daniel Abadi formalized normal operating trade-offs through the **PACELC Theorem**: if there is a **P**artition, how does the system balance **A**vailability versus **C**onsistency; **E**lse, how does it balance **L**atency versus **C**onsistency (Abadi, 2012). Distributed systems are not bound to monolithic consistency profiles; database families describe data modeling abstractions rather than static consistency guarantees. In MongoDB, consistency is tunable at the operation level using Write Concern (`w: 1` versus `w: "majority"`) and Read Concern (`"local"` versus `"majority"`).
+
+```mermaid
+flowchart TD
+    NoSQL["NoSQL Decision Criteria"]
+    KV["Key-Value: O(1) Cache<br/>(Fails Multi-Field Analytics)"]
+    DOC["Document: BSON Aggregates<br/>(Optimal for IoT Telemetry)"]
+    COL["Wide-Column: LSM Append<br/>(Excessive Multi-Node Overhead)"]
+    GRP["Graph: Index-Free Adjacency<br/>(Ill-Suited for Linear Time Series)"]
+    NoSQL --> KV
+    NoSQL --> DOC
+    NoSQL --> COL
+    NoSQL --> GRP
+```
+
+MongoDB is selected for IoThings because it operates as a consistent, partition-tolerant (CP) store during cluster network partitions when configured with `w: "majority"`, preventing dirty writes and conflicting updates to actuator controls. Wide-column architectures (e.g., Cassandra) would win only if daily ingestion scaled to billions of immutable points requiring multi-datacenter masterless writes.
+
+*Table 1: Multi-criteria NoSQL paradigm evaluation for smart utility telemetry `[Source-inspected]`*
+
+| Architectural Criterion | Key–Value (Redis) | Wide-Column (Cassandra) | Graph (Neo4j) | Document (MongoDB) |
+|---|---|---|---|---|
+| **Payload Structure** | Opaque string or hash | Sparse column family | Nodes, edges, properties | **Hierarchical nested BSON** |
+| **Storage Engine** | In-memory hash / skiplist | Disk-backed LSM-Tree | Graph store / pointers | **WiredTiger B-Tree** |
+| **Secondary Indexing** | Application-managed | Partition key restricted | Structural edge indexing | **Rich compound B-Tree** |
+| **Analytical Pipeline** | External compute needed | Restricted CQL grouping | Path graph traversals | **Native Aggregation Stages** |
+| **Failover Model** | Sentinel / Master-replica | Peer-to-peer ring | Causal clustering | **Raft-variant Replica Set** |
+| **Suitability for IoThings**| Transient state cache | Large-scale multi-region | Physical topology maps | **Primary Telemetry Store** |
+
+---
+
+## 3 Critical Comparison: Relational and Document Databases
+
+### 3.1 Schema, Relationships and Integrity
+
+The relational model separates logical data representation from physical disk layout, expressing data structures strictly as relations (tables) governed by first, second, and third normal forms (Codd, 1970). In relational enterprise systems, such as IoThings’ existing ERP and billing databases, normalization eliminates redundant facts, while foreign key constraints, primary keys, and column check constraints guarantee referential integrity centrally at the database engine level (PostgreSQL Global Development Group, n.d.a). 
+
+Conversely, document databases model data around application access patterns. Storing a telemetric snapshot from `HOME_HUB_01` in an RDBMS requires decomposing the reading into four normalized tables (`readings`, `tank_depths`, `float_switches`, `actuator_states`). In MongoDB, the entire reading is stored as a single contiguous BSON document. However, document flexibility does not imply an absence of structure. Without governance, flexible collections risk accumulating inconsistent units, missing properties, or conflicting schema versions. MongoDB addresses this through collection-level JSON Schema validators (`$jsonSchema`), while application layers enforce type boundaries.
+
+Nevertheless, relational advocates correctly note that modern relational engines, such as PostgreSQL, natively support indexed JSONB data types (PostgreSQL Global Development Group, n.d.c). PostgreSQL allows unstructured JSON payloads to coexist alongside relational tables, supporting GIN index queries on nested attributes. Furthermore, a decisive limitation of MongoDB is that it cannot enforce cross-collection foreign key integrity. While an event document in `sensor_activations` references a `device_id`, the database engine does not verify whether that device exists in the `devices` collection. Relational systems enforce referential constraints natively, whereas MongoDB delegates referential validation entirely to application code.
+
+### 3.2 Queries, Performance and Scalability
+
+SQL provides a declarative query language optimized for joins, projections, and mathematical grouping across normalized tables. However, as tables scale into millions of rows, multi-table joins exhaust relational buffer pools and induce high random disk I/O (Stonebraker, 2010). Document databases eliminate join overhead by colocating related data within a single document. MongoDB’s Aggregation Pipeline processes time-series documents natively, transforming and bucketing readings within the database engine rather than transporting raw rows to client applications.
+
+Neither architecture is inherently faster. Query performance is determined by working-set sizing, index selectivity, storage engine layout, and hardware I/O constraints. An index accelerates specific query paths while increasing disk consumption and imposing latency overhead on inserts. As demonstrated in Section 4.4, adding a compound B-Tree index reduced scanned documents from 30,985 to 50 for a specific query; this empirical result proves reduced scan work for that pattern, not universal superiority across all workloads.
+
+Furthermore, replication and sharding address fundamentally different operational concerns. A MongoDB replica set copies a single logical dataset across multiple data-bearing members to ensure high availability; it does not distribute write throughput across multiple nodes. Horizontal write scaling requires database sharding using a shard key (MongoDB, n.d.g). Relational engines similarly support read replicas, table partitioning, and distributed sharding. For an SME, deploying sharding prematurely introduces routing and balancing complexity; maintaining a well-indexed single replica set offers far superior operational stability.
+
+### 3.3 Transactions, Consistency and Delivery Guarantees
+
+In academic literature, consistency in ACID transactions represents a different guarantee from consistency in the CAP theorem. ACID consistency ensures that a transaction transitions a database from one valid state to another without violating defined constraints, whereas CAP consistency denotes single-copy linearizability across distributed nodes (Kleppmann, 2017). Relational engines offer configurable transaction isolation levels, including Read Committed, Repeatable Read, and Serializable (PostgreSQL Global Development Group, n.d.b). MongoDB supports multi-document ACID transactions across replica sets (MongoDB, n.d.h). While single-document atomicity is guaranteed, a multi-step sequence—such as inserting a sensor event, evaluating an alert rule, and updating an actuator state—is not atomic unless wrapped in a multi-document transaction.
+
+Under MQTT QoS 1 transport, messages are delivered "at least once" (Banks and Gupta, 2014). Network disconnections cause the Mosquitto broker to retransmit packets, resulting in duplicate delivery. The IoThings demonstrator suppresses duplicates using a unique compound index on `{ device_id: 1, timestamp: 1 }`. However, suppressing duplicates does not resolve distributed coordination failures. If the backend server crashes after inserting a reading but before dispatching an actuator command, an event remains stored without automated rule evaluation. Relational systems face an identical limitation when coordinating with external brokers. A database transaction cannot guarantee delivery to an external MQTT network. Resolving this boundary requires implementing the Transactional Outbox Pattern, persisting outbound commands into an outbox collection within the database before asynchronous dispatch.
+
+### 3.4 Governance, Cost and Client Judgement
+
+Both relational and NoSQL databases require comprehensive operational governance, including user authentication, role-based access control, TLS network encryption, disaster recovery planning, and automated backups (MongoDB, n.d.f). Deploying a MongoDB replica set does not automatically secure data or ensure high availability without operational hardening. Furthermore, maintaining two disparate database paradigms introduces financial overhead, requiring separate monitoring infrastructure, backup tooling, and staff competencies.
+
+The defensible architectural recommendation for IoThings is **coexistence**:
+1. Retain existing relational databases (e.g., PostgreSQL) for ERP, customer billing, and financial ledgers where cross-table foreign key enforcement and multi-table transactions are paramount.
+2. Introduce a dedicated MongoDB replica set (`rs0`) for high-velocity smart home telemetry, exploiting its native BSON modeling, compound indexing, and time-bucket aggregations.
+3. If IoThings' future roadmap predominantly joins sensor telemetry directly against customer invoicing, or engineering resources cannot maintain two distinct database technologies, a consolidated PostgreSQL architecture utilizing indexed JSONB columns should be evaluated as an alternative.
+
+---
 
 ## 4 System Architecture, Implementation and Distributed Management
 
