@@ -1,4 +1,5 @@
-const base = (process.env.EXPO_PUBLIC_API_BASE_URL ?? '').replace(/\/$/, '');
+export const API_BASE_URL = (process.env.EXPO_PUBLIC_API_BASE_URL ?? '').replace(/\/$/, '');
+const base = API_BASE_URL;
 
 export class ApiError extends Error {
   status: number;

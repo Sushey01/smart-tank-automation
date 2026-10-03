@@ -1,15 +1,20 @@
-\contentsline {figure}{\numberline {1}{\ignorespaces Schema evolution: Heterogeneous firmware payloads coexisting in one collection.}}{6}{figure.caption.2}%
-\contentsline {figure}{\numberline {2}{\ignorespaces Active B-Tree indexes inspected in MongoDB Compass.}}{7}{figure.caption.4}%
-\contentsline {figure}{\numberline {3}{\ignorespaces System data flow and distributed topology.}}{8}{figure.caption.5}%
-\contentsline {figure}{\numberline {4}{\ignorespaces Process table confirming three isolated local MongoDB daemon processes.}}{8}{figure.caption.6}%
-\contentsline {figure}{\numberline {5}{\ignorespaces Replica set status: 1 Primary and 2 Secondaries with health 1.}}{9}{figure.caption.8}%
-\contentsline {figure}{\numberline {6}{\ignorespaces Document count parity across all replica set nodes.}}{9}{figure.caption.9}%
-\contentsline {figure}{\numberline {7}{\ignorespaces Empirical failover probe measurement demonstrating zero acknowledged write loss.}}{10}{figure.caption.10}%
-\contentsline {figure}{\numberline {8}{\ignorespaces Quorum loss: Writes rejected when majority consensus is lost.}}{10}{figure.caption.11}%
-\contentsline {figure}{\numberline {9}{\ignorespaces Point-in-time backup and restore with 100\% data parity.}}{11}{figure.caption.12}%
-\contentsline {figure}{\numberline {10}{\ignorespaces Swagger UI interactive API documentation.}}{12}{figure.caption.13}%
-\contentsline {figure}{\numberline {11}{\ignorespaces Successful paginated query: \texttt {GET /api/telemetry/history}.}}{12}{figure.caption.14}%
-\contentsline {figure}{\numberline {12}{\ignorespaces API security: Enforcement of \texttt {X-API-Key} header.}}{13}{figure.caption.15}%
-\contentsline {figure}{\numberline {13}{\ignorespaces Live React web dashboard showing real-time tank telemetry.}}{13}{figure.caption.16}%
-\contentsline {figure}{\numberline {14}{\ignorespaces React cluster diagnostics and failover monitoring dashboard.}}{14}{figure.caption.17}%
-\contentsline {figure}{\numberline {15}{\ignorespaces MongoDB Compass document explorer showing real-time BSON data structure.}}{18}{figure.caption.18}%
+\contentsline {figure}{\numberline {1}{\ignorespaces Schema evolution: heterogeneous firmware payloads coexisting in one collection.}}{6}{figure.caption.3}%
+\contentsline {figure}{\numberline {2}{\ignorespaces Indexes on \texttt {sensor\_activations} inspected in MongoDB Compass.}}{7}{figure.caption.5}%
+\contentsline {figure}{\numberline {3}{\ignorespaces Compound indexes on the \texttt {alerts} collection inspected in MongoDB Compass.}}{8}{figure.caption.6}%
+\contentsline {figure}{\numberline {4}{\ignorespaces System architecture: write path (solid) and read path (dashed).}}{9}{figure.caption.7}%
+\contentsline {figure}{\numberline {5}{\ignorespaces Process table confirming three isolated local MongoDB daemon processes.}}{10}{figure.caption.8}%
+\contentsline {figure}{\numberline {6}{\ignorespaces Node.js ingestion service: insert, dead-letter routing and duplicate handling.}}{10}{figure.caption.9}%
+\contentsline {figure}{\numberline {7}{\ignorespaces Replica set status: one primary and two secondaries, all healthy.}}{12}{figure.caption.12}%
+\contentsline {figure}{\numberline {8}{\ignorespaces Document counts across replica set members (within one document, as ingestion continued) and measured replication lag.}}{12}{figure.caption.13}%
+\contentsline {figure}{\numberline {9}{\ignorespaces Graceful step-down failover probe: 19 of 19 writes acknowledged, longest pause 0.62~s, no acknowledged write lost.}}{13}{figure.caption.14}%
+\contentsline {figure}{\numberline {10}{\ignorespaces Abrupt primary termination (\texttt {kill -9}): longest write pause 11.48~s; 67 of 67 acknowledged writes present afterwards; 12 writes during the outage not acknowledged.}}{14}{figure.caption.15}%
+\contentsline {figure}{\numberline {11}{\ignorespaces Quorum loss with two of three members stopped: the majority write is not acknowledged (write-concern timeout).}}{14}{figure.caption.16}%
+\contentsline {figure}{\numberline {12}{\ignorespaces Backup and restore with full document-count parity.}}{15}{figure.caption.17}%
+\contentsline {figure}{\numberline {13}{\ignorespaces Swagger UI interactive API documentation.}}{16}{figure.caption.19}%
+\contentsline {figure}{\numberline {14}{\ignorespaces Successful paginated query: \texttt {GET /api/telemetry/history}.}}{17}{figure.caption.20}%
+\contentsline {figure}{\numberline {15}{\ignorespaces API security: enforcement of the \texttt {X-API-Key} header.}}{17}{figure.caption.21}%
+\contentsline {figure}{\numberline {16}{\ignorespaces CRUD operations demonstrated through the API.}}{18}{figure.caption.22}%
+\contentsline {figure}{\numberline {17}{\ignorespaces Live React dashboard with water-intelligence analytics.}}{18}{figure.caption.23}%
+\contentsline {figure}{\numberline {18}{\ignorespaces Tank gauge, sensor states and recent alerts in the React interface.}}{19}{figure.caption.24}%
+\contentsline {figure}{\numberline {19}{\ignorespaces React cluster diagnostics and failover monitoring view.}}{19}{figure.caption.25}%
+\contentsline {figure}{\numberline {20}{\ignorespaces MongoDB Compass document explorer showing the BSON data structure.}}{28}{figure.caption.33}%

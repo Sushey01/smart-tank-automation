@@ -4,7 +4,7 @@
 ============================================================
 
 [CRUD: CREATE] Inserting document with w:majority...
-  -> insertedId: 6abf5d98a124158517dba800
+  -> insertedId: 6ac089fb0259ad6dff33843d
   -> acknowledged: true
 
 [CRUD: READ] Querying inserted document by _id...

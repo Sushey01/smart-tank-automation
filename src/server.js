@@ -6,6 +6,7 @@
  */
 
 const os = require('os');
+const fs = require('fs');
 const express = require('express');
 const cors = require('cors');
 const mqtt = require('mqtt');
@@ -56,9 +57,14 @@ const client = new MongoClient(MONGO_URI, {
 const secondary = { readPreference: new ReadPreference('secondaryPreferred') };
 const LEVEL_FIELD = '$telemetry.water_tank.ultrasonic_depth_pct';
 
+const path = require('path');
+
 const app = express();
-app.use(cors({ origin: ['http://localhost:5173', 'http://localhost:3000'] }));
+app.use(cors());
 app.use(express.json({ limit: '32kb' }));
+app.get('/siren.wav', (req, res) => {
+  res.sendFile(path.join(__dirname, '../mobile/assets/siren.wav'));
+});
 setupSwagger(app);
 
 let collection;
@@ -717,6 +723,21 @@ function startMqtt() {
         console.error('[ingest] insert failed', err.message);
       }
     }
+  });
+}
+
+const webDistPath = path.join(__dirname, '../web/dist');
+if (fs.existsSync(webDistPath)) {
+  app.use(express.static(webDistPath));
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api') || req.path.startsWith('/docs') || req.path.startsWith('/siren.wav')) {
+      return next();
+    }
+    const indexHtml = path.join(webDistPath, 'index.html');
+    if (fs.existsSync(indexHtml)) {
+      return res.sendFile(indexHtml);
+    }
+    next();
   });
 }
 

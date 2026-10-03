@@ -1,0 +1,14 @@
+{
+  "timestamp": "2026-10-03T04:06:02.475Z",
+  "session_id": "probe-1791000322455",
+  "probe_interval_ms": 500,
+  "total_attempted": 79,
+  "total_acknowledged": 68,
+  "total_failed": 11,
+  "longest_write_pause_ms": 11232,
+  "longest_write_pause_seconds": "11.23",
+  "average_latency_ms": 455,
+  "missing_acknowledged_writes": 0,
+  "durability_verified": true,
+  "statement": "Demonstrates automatic failover with no acknowledged-write loss; brief write pause during election."
+}

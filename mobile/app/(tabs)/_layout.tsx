@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { Tabs } from 'expo-router';
-import { getSummary } from '../../src/api/telemetry';
+import { getSmartAlerts, getSummary } from '../../src/api/telemetry';
 import { SirenControl } from '../../src/components/SirenControl';
 import { useTheme } from '../../src/theme';
 
@@ -13,7 +13,18 @@ export default function TabsLayout() {
     queryFn: getSummary,
     ...poll,
   });
-  const alertActive = Boolean(summary.data?.reading?.alert);
+  const alerts = useQuery({
+    queryKey: ['smart-alerts', 'siren'],
+    queryFn: () => getSmartAlerts({ limit: 10 }),
+    ...poll,
+  });
+  const levelAlertActive = Boolean(summary.data?.reading?.alert);
+  const unreadLeakAlerts = Boolean(
+    alerts.data?.items?.some(
+      (a) => a.alert_type === 'ABNORMAL_WATER_USAGE' && a.status === 'unread'
+    )
+  );
+  const alertActive = levelAlertActive || unreadLeakAlerts;
 
   return (
     <Tabs

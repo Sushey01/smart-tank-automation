@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { getHealth } from '../../src/api/health';
-import { getAlerts, getAverages, getHistorySeries, getSummary } from '../../src/api/telemetry';
+import { getAlerts, getAverages, getHistorySeries, getSummary, getWaterInsights } from '../../src/api/telemetry';
 import { Sparkline } from '../../src/components/Sparkline';
 import { Badge, Card, EmptyState, ErrorState, Screen, Skeleton } from '../../src/components/States';
 import { TankGauge } from '../../src/components/TankGauge';
@@ -16,6 +16,7 @@ export default function HomeScreen() {
   const alerts = useQuery({ queryKey: ['alerts', 'home'], queryFn: () => getAlerts({ limit: 5, page: 1 }), ...poll });
   const health = useQuery({ queryKey: ['health'], queryFn: getHealth, ...poll });
   const averages = useQuery({ queryKey: ['averages'], queryFn: getAverages, ...poll });
+  const waterInsights = useQuery({ queryKey: ['water-insights'], queryFn: getWaterInsights, ...poll });
   const hourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
   const series = useQuery({
     queryKey: ['history-series', 'minute', 'hour'],
@@ -63,6 +64,55 @@ export default function HomeScreen() {
           <Stat label="Trend" value={data.trend.charAt(0).toUpperCase() + data.trend.slice(1)} hint={`${formatNumber(data.rate_litres_per_hour, 1)} L/h over 15 min`} />
           <Stat label="Time estimate" value={estimateText(data.estimate.kind, data.estimate.minutes)} hint={estimateHint(data.estimate.kind)} />
         </View>
+
+        {waterInsights.data && (
+          <Card>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text style={[styles.heading, { color: colors.ink }]}>Water Intelligence</Text>
+              <Badge label="Report §5.1" tone="brand" />
+            </View>
+            <Text style={{ color: colors.inkMuted }}>
+              Analytics & Depletion Heuristics
+            </Text>
+            <View style={styles.grid}>
+              <Stat
+                label="Today's Usage"
+                value={`${formatNumber(waterInsights.data.consumption.today_litres, 0)} L`}
+                hint={`Avg: ${formatNumber(waterInsights.data.consumption.daily_average_litres, 0)} L/day`}
+              />
+              <Stat
+                label="Depletion Forecast"
+                value={waterInsights.data.prediction.display || 'Normal'}
+                hint={waterInsights.data.prediction.recommendation || 'Until 25% dry-run'}
+              />
+            </View>
+            {waterInsights.data.latest_alert?.alert_type === 'ABNORMAL_WATER_USAGE' &&
+              waterInsights.data.latest_alert.status === 'unread' && (
+                <View
+                  style={{
+                    backgroundColor: colors.muted,
+                    borderWidth: 1,
+                    borderColor: colors.danger,
+                    borderRadius: 14,
+                    padding: 12,
+                    gap: 4,
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Badge label="Overnight Leak" tone="danger" />
+                    <Text style={{ color: colors.ink, fontWeight: '700', fontSize: 13, flex: 1 }}>
+                      ~{waterInsights.data.latest_alert.estimated_excess_loss_litres || 30} L Excess Loss
+                    </Text>
+                  </View>
+                  <Text style={{ color: colors.inkMuted, fontSize: 12 }}>
+                    {waterInsights.data.latest_alert.recommendation ||
+                      'Check household taps, toilets, and pipelines.'}
+                  </Text>
+                </View>
+              )}
+          </Card>
+        )}
+
         <Card>
           <Text style={[styles.heading, { color: colors.ink }]}>Sensors</Text>
           <Text style={{ color: colors.inkMuted }}>HOME_HUB_01 · three sensors on this tank</Text>

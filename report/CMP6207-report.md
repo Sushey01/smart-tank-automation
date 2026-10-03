@@ -373,25 +373,32 @@ Analytical and history endpoints support granular querying. The `/api/telemetry/
 Client presentation is delivered through a responsive React 18 single-page application executed with Vite (`web/`). The user interface queries `/api/telemetry/latest` every two seconds, updating dynamic visual telemetry components without full-page reloads. Key interface elements include an animated fluid depth gauge, real-time volume calculation ($V = \text{depth} \times 20\text{ L}$), operational mode toggles (AUTO versus MANUAL override), booster pump relay indicators, inlet valve status badges, and an SVG time-series historical consumption chart. A dedicated cluster diagnostics dashboard (`/cluster`) continuously monitors `/api/health` and `/api/replica-status`, displaying individual replica set member cards, replication lag metrics, and ping latencies. If the Primary node steps down, the dashboard immediately renders an amber warning banner alerting operators to the election transition in flight.
 
 ```
-📷 [SCREENSHOT PLACEHOLDER: Figure 5 - Swagger UI API Documentation Overview]
-File: report/images/05-swagger-overview.png | Status: Captured & Verified
-Action: View mounted Swagger UI at http://localhost:3000/api-docs displaying all 14 REST paths.
+📷 [EVIDENCE CAPTURED: Figure 5 - Swagger UI API Documentation Overview]
+File: figures/05-swagger.png | Status: Captured & Verified
+Interactive Swagger documentation mounted at http://localhost:3000/api-docs displaying all 14 REST paths.
 ```
-*Figure 5: Swagger UI interactive API contract overview `[Measured: report/images/05-swagger-overview.png]`*
+*Figure 5: Swagger UI interactive API contract overview `[Measured: figures/05-swagger.png]`*
 
 ```
-📷 [SCREENSHOT PLACEHOLDER: Figure 8 - React Web Dashboard with Tank Gauge and Trend Chart]
-File: report/images/08-web-dashboard.png | Status: Pending capture
-Command / View: Open browser at http://localhost:5173. Capture live dashboard showing water tank depth gauge, volume in litres, active valve/pump indicators, and historical trend chart.
+📷 [EVIDENCE CAPTURED: Figure 8 - React Web Dashboard with Water Intelligence Analytics]
+File: figures/06-dashboard.png | Status: Captured & Verified
+Live React web dashboard at http://localhost:5173 showing executive user card, leak alarm, water intelligence KPI cards, and 7-day consumption bar chart.
 ```
-*Figure 8: Running React web dashboard with live tank telemetry slot `[Pending capture: 08-web-dashboard.png]`*
+*Figure 8: Running React web dashboard with enhanced water intelligence `[Measured: figures/06-dashboard.png]`*
 
 ```
-📷 [SCREENSHOT PLACEHOLDER: Figure 9 - Cluster Health Page Demonstrating Failover]
-File: report/images/09-cluster-failover.png | Status: Pending capture
-Command / View: Navigate to http://localhost:5173/cluster. Forcibly step down the primary and capture the amber failover notification banner showing primary role transition.
+📷 [EVIDENCE CAPTURED: Figure 8b - React Web Dashboard Tank Gauge and Hardware Relays]
+File: figures/06-dashboard-gauge.png | Status: Captured & Verified
+Live React web dashboard lower view showing animated ultrasonic gauge (68.5%), sensor relays, water quality metrics, and telemetry sparklines.
 ```
-*Figure 9: Cluster management and primary failover detection view slot `[Pending capture: 09-cluster-failover.png]`*
+*Figure 8b: React web dashboard tank gauge and actuator telemetry `[Measured: figures/06-dashboard-gauge.png]`*
+
+```
+📷 [EVIDENCE CAPTURED: Figure 9 - Cluster Health Page Demonstrating Failover]
+File: figures/E2-cluster-page.png | Status: Captured & Verified
+Cluster diagnostics view at http://localhost:5173/cluster showing 3-node replica set status, latencies, and health.
+```
+*Figure 9: Cluster management and primary failover detection view `[Measured: figures/E2-cluster-page.png]`*
 
 ---
 

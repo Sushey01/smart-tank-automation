@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   AlertTriangle,
@@ -8,6 +8,7 @@ import {
   Droplets,
   Home,
   TrendingDown,
+  Volume2,
   VolumeX,
   Zap,
 } from 'lucide-react';
@@ -21,8 +22,6 @@ export function SmartWaterInsights() {
   const queryClient = useQueryClient();
   const [selectedHome, setSelectedHome] = useState<string>('H001');
   const [isBuzzerSilenced, setIsBuzzerSilenced] = useState<boolean>(false);
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const stopBuzzerRef = useRef<(() => void) | null>(null);
 
   const insightsQuery = useQuery({
     queryKey: ['water-insights', selectedHome],
@@ -64,72 +63,14 @@ export function SmartWaterInsights() {
   const activeAlert = data?.latest_alert && data.latest_alert.status === 'unread' ? data.latest_alert : null;
   const hasAbnormalAlert = activeAlert && (activeAlert.alert_type === 'ABNORMAL_WATER_USAGE' || activeAlert.alert_type.includes('LEAK'));
 
-  // Audio Buzzer logic using Web Audio API
-  useEffect(() => {
-    if (hasAbnormalAlert && !isBuzzerSilenced) {
-      playChime();
-    } else {
-      stopBuzzer();
-    }
-    return () => stopBuzzer();
-  }, [hasAbnormalAlert, isBuzzerSilenced]);
-
-  function playChime() {
-    try {
-      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      if (!AudioCtx) return;
-      if (!audioContextRef.current) {
-        audioContextRef.current = new AudioCtx();
-      }
-      const ctx = audioContextRef.current;
-      if (ctx.state === 'suspended') void ctx.resume();
-
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(600, ctx.currentTime);
-      gain.gain.setValueAtTime(0.04, ctx.currentTime);
-
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start();
-
-      const interval = setInterval(() => {
-        if (!ctx) return;
-        osc.frequency.setValueAtTime(800, ctx.currentTime);
-        setTimeout(() => {
-          try {
-            osc.frequency.setValueAtTime(500, ctx.currentTime);
-          } catch {
-            /* ignore */
-          }
-        }, 150);
-      }, 700);
-
-      stopBuzzerRef.current = () => {
-        clearInterval(interval);
-        try {
-          osc.stop();
-          osc.disconnect();
-        } catch {
-          /* ignore */
-        }
-      };
-    } catch {
-      /* Browser autoplay audio policy fallback */
-    }
-  }
-
-  function stopBuzzer() {
-    if (stopBuzzerRef.current) {
-      stopBuzzerRef.current();
-      stopBuzzerRef.current = null;
-    }
-  }
-
   function silenceBuzzer() {
+    window.dispatchEvent(new CustomEvent('tank-siren-silence'));
     setIsBuzzerSilenced(true);
-    stopBuzzer();
+  }
+
+  function testBuzzer() {
+    setIsBuzzerSilenced(false);
+    window.dispatchEvent(new CustomEvent('tank-siren-test'));
   }
 
   // Generate continuous 7-day series for clean, non-sparse charting
@@ -257,16 +198,33 @@ export function SmartWaterInsights() {
             </div>
 
             <div className="flex items-center gap-2 self-center sm:self-auto">
-              {!isBuzzerSilenced && (
+              {!isBuzzerSilenced ? (
                 <button
                   type="button"
                   onClick={silenceBuzzer}
-                  className="badge-warn flex items-center gap-1.5 cursor-pointer py-1.5 px-3 hover:opacity-90"
+                  className="badge-warn flex items-center gap-1.5 cursor-pointer py-1.5 px-3 hover:opacity-90 font-medium"
                 >
                   <VolumeX size={14} />
                   Mute Buzzer
                 </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={testBuzzer}
+                  className="badge-danger flex items-center gap-1.5 cursor-pointer py-1.5 px-3 hover:opacity-90 font-medium"
+                >
+                  <Volume2 size={14} />
+                  Unmute Buzzer
+                </button>
               )}
+              <button
+                type="button"
+                onClick={testBuzzer}
+                className="badge flex items-center gap-1.5 cursor-pointer py-1.5 px-2.5 hover:bg-surface-border text-xs"
+                title="Play test alarm buzzer"
+              >
+                🔊 Test Sound
+              </button>
               <button
                 type="button"
                 disabled={ackMutation.isPending}

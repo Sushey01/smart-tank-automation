@@ -29,3 +29,11 @@ export function getHistory(params: { page?: number; limit?: number }) {
 export function getHistorySeries(params: { from?: string; bucket: 'minute' | 'hour' }) {
   return apiGet<HistorySeries>(`/api/telemetry/history${query(params)}`);
 }
+
+export function getWaterInsights() {
+  return apiGet<import('../types').WaterInsights>('/api/analytics/summary');
+}
+
+export function getSmartAlerts(params: { page?: number; limit?: number } = {}) {
+  return apiGet<PageResult<import('../types').SmartAlert>>(`/api/alerts${query(params)}`);
+}
